@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from physics_modes import SingleJumpMode, JumpEstimationMode
+from modes import SingleJumpMode, JumpEstimationMode
 
 # Constants
 GRAVITY = 9.81

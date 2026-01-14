@@ -1,0 +1,61 @@
+"""
+Shared UI components - plot and history panel.
+"""
+import dearpygui.dearpygui as dpg
+from .callbacks import (
+    tare_callback, 
+    toggle_autofit, 
+    clear_history_callback, 
+    delete_selected_jump_callback, 
+    history_click_callback
+)
+from .single_jump import create_single_jump_header
+from .jump_estimation import create_jump_estimation_header
+
+
+def create_shared_content():
+    """Create the shared workspace content (plot and history)."""
+    with dpg.group(tag="group_workspace", show=False):
+        
+        # Mode-specific headers
+        create_single_jump_header()
+        create_jump_estimation_header()
+        
+        dpg.add_separator()
+        
+        # --- SHARED CONTENT (Plot & History) ---
+        with dpg.group(horizontal=True):
+            
+            # LEFT: PLOT
+            with dpg.child_window(width=-250, height=600, border=True):
+                dpg.add_text("Live Force Monitor / Analysis")
+                with dpg.plot(tag="main_plot", height=-1, width=-1):
+                    dpg.add_plot_legend()
+                    dpg.add_plot_axis(dpg.mvXAxis, label="Time (s)", tag="x_axis")
+                    
+                    with dpg.plot_axis(dpg.mvYAxis, label="Force (kg)", tag="y_axis"):
+                        dpg.add_line_series([], [], label="Force", tag="plot_line_series")
+                        dpg.add_line_series([], [], label="Jumper Mass", tag="plot_line_series_mass")
+                        dpg.bind_item_theme("plot_line_series_mass", "theme_mass_line")
+                    
+                    with dpg.plot_axis(dpg.mvYAxis, label="Power (W)", tag="y_axis_power"):
+                        dpg.add_line_series([], [], label="Power", tag="plot_line_series_power", parent="y_axis_power")
+                    
+                    with dpg.plot_axis(dpg.mvYAxis, label="Velocity (m/s)", tag="y_axis_vel"):
+                        dpg.add_line_series([], [], label="Velocity", tag="plot_line_series_vel", parent="y_axis_vel")
+
+            # RIGHT: CONTROLS & HISTORY
+            with dpg.child_window(width=240, height=600):
+                dpg.add_text("Controls", color=(0, 255, 0))
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="TARE", callback=tare_callback, width=60)
+                    dpg.add_checkbox(label="AutoY", default_value=True, callback=toggle_autofit)
+                
+                dpg.add_spacer(height=10)
+                dpg.add_separator()
+                dpg.add_text("History")
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="Clr All", callback=clear_history_callback, width=60)
+                    dpg.add_button(label="Del", callback=delete_selected_jump_callback, width=60)
+                
+                dpg.add_listbox(tag="list_history", items=[], num_items=15, width=-1, callback=history_click_callback)

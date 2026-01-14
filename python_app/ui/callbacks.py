@@ -1,0 +1,247 @@
+"""
+Callback functions for the Force Plate PRO application.
+"""
+import dearpygui.dearpygui as dpg
+import numpy as np
+
+# These will be set by setup_callbacks()
+_physics = None
+_serial_handler = None
+_db = None
+_jump_history = None
+_selected_jump = None
+_auto_fit_y = True
+
+
+def setup_callbacks(physics, serial_handler, db, jump_history_ref):
+    """Initialize callbacks with references to app components."""
+    global _physics, _serial_handler, _db, _jump_history
+    _physics = physics
+    _serial_handler = serial_handler
+    _db = db
+    _jump_history = jump_history_ref
+
+
+def get_state():
+    """Get current application state."""
+    global _selected_jump, _auto_fit_y, _jump_history
+    return {
+        'selected_jump': _selected_jump,
+        'auto_fit_y': _auto_fit_y,
+        'jump_history': _jump_history
+    }
+
+
+def set_selected_jump(jump):
+    """Set the currently selected jump."""
+    global _selected_jump
+    _selected_jump = jump
+
+
+def get_selected_jump():
+    """Get the currently selected jump."""
+    return _selected_jump
+
+
+def get_jump_history():
+    """Get reference to jump history list."""
+    return _jump_history
+
+
+def set_jump_history(history):
+    """Update jump history reference."""
+    global _jump_history
+    _jump_history = history
+
+
+def toggle_autofit(sender, app_data):
+    """Toggle Y-axis auto-fit."""
+    global _auto_fit_y
+    _auto_fit_y = app_data
+
+
+def is_autofit_enabled():
+    """Check if autofit is enabled."""
+    return _auto_fit_y
+
+
+def connect_callback(sender, app_data):
+    """Handle connect/disconnect button."""
+    if not _serial_handler.connected:
+        ports = _serial_handler.list_ports()
+        target_port = ports[0] if ports else None
+        for p in ports:
+            if "COM9" in p:
+                target_port = p
+                break
+        if target_port and _serial_handler.connect(target_port):
+            dpg.configure_item("txt_status_s", default_value=f"Connected: {target_port}", color=(0, 255, 0))
+            dpg.configure_item("txt_status_e", default_value=f"Connected: {target_port}", color=(0, 255, 0))
+            dpg.set_item_label("btn_connect_s", "Disconnect")
+            dpg.set_item_label("btn_connect_e", "Disconnect")
+    else:
+        _serial_handler.disconnect()
+        dpg.configure_item("txt_status_s", default_value="Disconnected", color=(255, 0, 0))
+        dpg.configure_item("txt_status_e", default_value="Disconnected", color=(255, 0, 0))
+        dpg.set_item_label("btn_connect_s", "Connect")
+        dpg.set_item_label("btn_connect_e", "Connect")
+
+
+def tare_callback():
+    """Start tare process."""
+    _physics.start_tare()
+    print("Tare started")
+
+
+def clear_history_callback():
+    """Clear all jump history."""
+    global _jump_history
+    _db.clear()
+    _jump_history.clear()
+    dpg.configure_item("list_history", items=[])
+    dpg.configure_item("plot_line_series", x=[], y=[])
+    dpg.configure_item("plot_line_series_power", x=[], y=[])
+    dpg.configure_item("plot_line_series_vel", x=[], y=[])
+    dpg.configure_item("plot_line_series_mass", x=[], y=[])
+
+
+def delete_selected_jump_callback():
+    """Delete the currently selected jump."""
+    global _jump_history, _selected_jump
+    selection = dpg.get_value("list_history")
+    if not selection:
+        return
+    
+    idx_str = selection.split(':')[0].replace('#', '')
+    try:
+        idx = int(idx_str)
+        _jump_history[:] = [j for j in _jump_history if j['_id'] != idx]
+        
+        # Update Listbox
+        items = [
+            f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
+            if j.get('height_flight', 0) > 0 
+            else f"#{j['_id']}: Imp {j['height_impulse']:.1f}cm" 
+            for j in _jump_history
+        ]
+        dpg.configure_item("list_history", items=items)
+        
+        if _selected_jump and _selected_jump['_id'] == idx:
+            _selected_jump = None
+            dpg.configure_item("plot_line_series", x=[], y=[])
+            dpg.configure_item("plot_line_series_power", x=[], y=[])
+            dpg.configure_item("plot_line_series_vel", x=[], y=[])
+            
+    except ValueError:
+        pass
+
+
+def history_click_callback(sender, app_data):
+    """Handle click on history item."""
+    global _selected_jump
+    if not app_data:
+        return
+    
+    idx_str = app_data.split(':')[0].replace('#', '')
+    try:
+        idx = int(idx_str)
+        target = None
+        for j in _jump_history:
+            if j['_id'] == idx:
+                target = j
+                break
+        
+        if target:
+            _selected_jump = target
+            curve = target['force_curve']
+            xs = [(p['t'] - curve[0]['t'])/1000.0 for p in curve]
+            ys = [p['v'] for p in curve] 
+            ps = [p['p'] for p in curve] 
+            vs = [p.get('vel', 0) for p in curve] 
+            
+            xs = np.ascontiguousarray(xs)
+            ys = np.ascontiguousarray(ys)
+            ps = np.ascontiguousarray(ps)
+            vs = np.ascontiguousarray(vs)
+
+            dpg.configure_item("plot_line_series", x=xs, y=ys)
+            dpg.configure_item("plot_line_series_power", x=xs, y=ps)
+            dpg.configure_item("plot_line_series_vel", x=xs, y=vs)
+            
+            dpg.fit_axis_data("x_axis")
+            dpg.fit_axis_data("y_axis")
+            dpg.fit_axis_data("y_axis_power")
+            dpg.fit_axis_data("y_axis_vel")
+            
+    except Exception as e:
+        print(e)
+
+
+def reset_view_callback():
+    """Reset to live view."""
+    global _selected_jump
+    _selected_jump = None
+
+
+def manual_mass_callback(sender, app_data):
+    """Handle manual mass input."""
+    if hasattr(_physics.active_mode, 'set_mass'):
+        try:
+            mass = float(app_data)
+            _physics.active_mode.set_mass(mass)
+        except ValueError:
+            pass
+
+
+def manual_start_vel_callback(sender, app_data):
+    """Handle manual start velocity input."""
+    if hasattr(_physics.active_mode, 'set_start_velocity'):
+        try:
+            vel = float(app_data)
+            _physics.active_mode.set_start_velocity(vel)
+        except ValueError:
+            pass
+
+
+# --- MENU NAVIGATION ---
+def show_menu(sender=None, app_data=None):
+    """Show main menu, hide workspace."""
+    dpg.hide_item("group_workspace")
+    dpg.show_item("group_menu")
+
+
+def show_single_jump(sender=None, app_data=None):
+    """Switch to Single Jump mode."""
+    _physics.set_mode("Single Jump")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.show_item("group_header_single")
+    dpg.hide_item("group_header_estimation")
+
+
+def show_jump_estimation(sender=None, app_data=None):
+    """Switch to Jump Estimation mode."""
+    _physics.set_mode("Jump Estimation")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.hide_item("group_header_single")
+    dpg.show_item("group_header_estimation")
+
+
+def on_new_jump(jump_result):
+    """Callback when a new jump is recorded."""
+    global _selected_jump, _jump_history
+    # Save to DB
+    new_id = _db.save_jump(jump_result)
+    jump_result['_id'] = new_id
+    
+    # Add to history
+    _jump_history.insert(0, jump_result)  # Newest first
+    _selected_jump = jump_result
+
+
+def safe_fmt(val, unit, fmt=".1f"):
+    """Format value with unit, handling None."""
+    if val is None:
+        return "--"
+    return f"{val:{fmt}} {unit}"

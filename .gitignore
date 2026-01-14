@@ -1,0 +1,30 @@
+# Ignore desktop app (Electron/Tauri app - not used)
+desktop_app/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database files (local data)
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db

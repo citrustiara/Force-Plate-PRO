@@ -66,6 +66,12 @@ class PhysicsEngine:
         self.zero_offset = offset
         self.reset_state()
 
+    def set_frequency(self, hz):
+        """Update the sampling frequency."""
+        if hz > 0:
+            self.config["frequency"] = hz
+            print(f"Physics frequency updated to {hz} Hz")
+
     def start_tare(self):
         self.is_taring = True
         self.tare_start_time = 0

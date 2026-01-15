@@ -48,7 +48,7 @@ def main():
         create_shared_content()
 
     # --- MAIN LOOP ---
-    dpg.create_viewport(title='Force Plate PRO', width=1400, height=850)
+    dpg.create_viewport(title='Force Plate PRO', width=1600, height=1000)
     dpg.setup_dearpygui()
     dpg.show_viewport()
     dpg.set_primary_window("Primary Window", True)

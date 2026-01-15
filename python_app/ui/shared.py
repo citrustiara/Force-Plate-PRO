@@ -27,7 +27,7 @@ def create_shared_content():
         with dpg.group(horizontal=True):
             
             # LEFT: PLOT
-            with dpg.child_window(width=-250, height=600, border=True):
+            with dpg.child_window(width=-250, height=700, border=True):
                 dpg.add_text("Live Force Monitor / Analysis")
                 with dpg.plot(tag="main_plot", height=-1, width=-1):
                     dpg.add_plot_legend()
@@ -45,7 +45,7 @@ def create_shared_content():
                         dpg.add_line_series([], [], label="Velocity", tag="plot_line_series_vel", parent="y_axis_vel")
 
             # RIGHT: CONTROLS & HISTORY
-            with dpg.child_window(width=240, height=600):
+            with dpg.child_window(width=240, height=700):
                 dpg.add_text("Controls", color=(0, 255, 0))
                 with dpg.group(horizontal=True):
                     dpg.add_button(label="TARE", callback=tare_callback, width=60)

@@ -4,7 +4,7 @@ Base physics mode class and shared constants.
 import numpy as np
 
 # Constants - logic specific
-AIR_THRESHOLD = 100000
+AIR_THRESHOLD = 200000
 MOVEMENT_THRESHOLD = 26000
 STABILITY_TOLERANCE_KG = 1.9
 MAX_PROPULSION_TIME_MS = 100000

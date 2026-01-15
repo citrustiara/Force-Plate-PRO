@@ -168,6 +168,14 @@ def history_click_callback(sender, app_data):
             dpg.configure_item("plot_line_series_power", x=xs, y=ps)
             dpg.configure_item("plot_line_series_vel", x=xs, y=vs)
             
+            # --- ADDED: Mass line update ---
+            mass = target.get('jumper_weight', 0)
+            if mass > 0 and len(xs) > 0:
+                dpg.configure_item("plot_line_series_mass", x=[xs[0], xs[-1]], y=[mass, mass])
+            else:
+                dpg.configure_item("plot_line_series_mass", x=[], y=[])
+            # -------------------------------
+            
             dpg.fit_axis_data("x_axis")
             dpg.fit_axis_data("y_axis")
             dpg.fit_axis_data("y_axis_power")
@@ -241,7 +249,14 @@ def on_new_jump(jump_result):
 
 
 def safe_fmt(val, unit, fmt=".1f"):
-    """Format value with unit, handling None."""
+    """Format value with unit, handling None and non-numeric types."""
     if val is None:
         return "--"
-    return f"{val:{fmt}} {unit}"
+    try:
+        fval = float(val)
+        return f"{fval:{fmt}} {unit}"
+    except (ValueError, TypeError):
+        # If it's already a string or can't be cast to float, return as is or with unit
+        if isinstance(val, str) and val.strip() == "":
+            return "--"
+        return f"{val} {unit}"

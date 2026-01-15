@@ -77,27 +77,40 @@ class DatabaseHandler:
         c.execute("SELECT * FROM jumps ORDER BY id DESC LIMIT ?", (limit,))
         rows = c.fetchall()
         
+        # Get column names to handle schema variations gracefully
+        col_names = [description[0] for description in c.description]
+        col_idx = {name: i for i, name in enumerate(col_names)}
+        
         history = []
         for r in rows:
-            # Map back to dict - handle both old and new schema
+            def get_val(name, default=None):
+                idx = col_idx.get(name)
+                return r[idx] if idx is not None and idx < len(r) else default
+
             j = {
-                "_id": r[0],
-                "timestamp": r[1],
-                "height_flight": r[2],
-                "height_impulse": r[3],
-                "peak_power": r[4],
-                "avg_power": r[5],
-                "flight_time": r[6],
-                "jumper_weight": r[7],
-                "velocity_takeoff": r[8],
-                "max_force": r[9],
-                "force_curve": json.loads(r[10]) if r[10] else []
+                "_id": get_val("id"),
+                "timestamp": get_val("timestamp"),
+                "height_flight": get_val("height_flight"),
+                "height_impulse": get_val("height_impulse"),
+                "peak_power": get_val("peak_power"),
+                "avg_power": get_val("avg_power"),
+                "flight_time": get_val("flight_time"),
+                "jumper_weight": get_val("jumper_weight"),
+                "velocity_takeoff": get_val("velocity_takeoff"),
+                "max_force": get_val("max_force"),
+                "force_curve": [],
+                "formula_peak_power": get_val("formula_peak_power"),
+                "formula_avg_power": get_val("formula_avg_power"),
+                "velocity_flight": get_val("velocity_flight")
             }
-            # New columns (may not exist in older databases)
-            if len(r) > 11:
-                j["formula_peak_power"] = r[11]
-                j["formula_avg_power"] = r[12]
-                j["velocity_flight"] = r[13]
+            
+            curve_str = get_val("force_curve")
+            if curve_str:
+                try:
+                    j["force_curve"] = json.loads(curve_str)
+                except:
+                    pass
+                    
             history.append(j)
         return history
 

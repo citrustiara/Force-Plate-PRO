@@ -19,3 +19,8 @@ def setup_themes():
     with dpg.theme(tag="theme_mass_line"):
         with dpg.theme_component(dpg.mvLineSeries):
             dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 255, 0), category=dpg.mvThemeCat_Core)
+
+    # Contact Time Marker Theme (Orange)
+    with dpg.theme(tag="theme_ct_marker"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 165, 0), category=dpg.mvThemeCat_Core)

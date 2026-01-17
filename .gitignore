@@ -2,14 +2,18 @@
 desktop_app/
 
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-.eggs/
-*.egg
+python_app/__pycache__/
+python_app/*.py[cod]
+python_app/*.pyc
+python_app/*$py.class
+python_app/*.so
+python_app/.Python
+python_app/*.egg-info/
+python_app/.eggs/
+python_app/*.egg
+python_app/check_db.py
+python_app/check_db_robust.py
+python_app/cols_list.json
 
 # Virtual environments
 venv/

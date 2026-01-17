@@ -8,8 +8,7 @@ from .base import (
     STABILITY_TOLERANCE_KG,
     MAX_PROPULSION_TIME_MS,
     MIN_AIR_TIME,
-    MAX_AIR_TIME,
-    GRAVITY
+    MAX_AIR_TIME
 )
 
 
@@ -23,9 +22,12 @@ class SingleJumpMode(PhysicsMode):
         self.calibration_start_time = 0.0
         self.calibration_sum = 0.0
         self.calibration_count = 0
-        self.calibration_min = 20000000.0
-        self.calibration_max = -20000000.0
         self.static_weight_raw = 0.0
+        
+        # Block-averaging for stability
+        self.block_sum = 0.0
+        self.block_count = 0
+        self.block_averages = []
         
         self.jumper_mass_kg = 0.0
         
@@ -55,6 +57,9 @@ class SingleJumpMode(PhysicsMode):
         self.sum_power = 0.0
         self.power_sample_count = 0
         self.propulsion_stability_start_time = 0.0
+        self.block_sum = 0.0
+        self.block_count = 0
+        self.block_averages = []
 
     def process_sample(self, raw, timestamp, micros, now, dt):
         engine = self.engine
@@ -64,8 +69,6 @@ class SingleJumpMode(PhysicsMode):
         gravity = engine.config["gravity"]
         
         weight = raw - engine.zero_offset
-        if weight < -10000:  # Simple noise clamp for sanity
-            weight = -weight
         
         display_kg = weight / raw_per_kg
         result = None
@@ -146,27 +149,35 @@ class SingleJumpMode(PhysicsMode):
                     self.calibration_start_time = now
                     self.calibration_sum = 0
                     self.calibration_count = 0
-                    self.calibration_min = 20000000
-                    self.calibration_max = -20000000
+                    self.block_sum = 0
+                    self.block_count = 0
+                    self.block_averages = []
                 
                 self.calibration_sum += weight
                 self.calibration_count += 1
-                self.calibration_min = min(self.calibration_min, weight)
-                self.calibration_max = max(self.calibration_max, weight)
                 
-                if now - self.calibration_start_time >= 500:
-                    noise_raw = self.calibration_max - self.calibration_min
-                    noise_kg = noise_raw / raw_per_kg
-                    
-                    if noise_kg <= STABILITY_TOLERANCE_KG:
-                        if self.calibration_count > 0:
+                # Block accumulation
+                self.block_sum += weight
+                self.block_count += 1
+                if self.block_count >= 30:
+                    self.block_averages.append(self.block_sum / 30.0)
+                    self.block_sum = 0
+                    self.block_count = 0
+                
+                if now - self.calibration_start_time >= 300:
+                    if len(self.block_averages) > 0:
+                        b_min = min(self.block_averages)
+                        b_max = max(self.block_averages)
+                        noise_kg = (b_max - b_min) / raw_per_kg
+                        
+                        if noise_kg <= STABILITY_TOLERANCE_KG:
                             self.static_weight_raw = self.calibration_sum / self.calibration_count
                             self.jumper_mass_kg = self.static_weight_raw / raw_per_kg
                             self.weight_confirmed = True
                             self.state = "READY"
-                        self.calibration_start_time = 0
-                    else:
-                        self.calibration_start_time = 0
+                    
+                    # Reset calibration window for retry
+                    self.calibration_start_time = 0
             else:
                 # READY or PROPULSION
                 if self.state != "PROPULSION":

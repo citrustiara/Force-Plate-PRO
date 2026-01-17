@@ -25,20 +25,45 @@ class DatabaseHandler:
             force_curve TEXT,
             formula_peak_power REAL,
             formula_avg_power REAL,
-            velocity_flight REAL
+            velocity_flight REAL,
+            contact_time REAL,
+            contact_start_time REAL,
+            contact_end_time REAL,
+            curve_start_time REAL
+        )''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
         )''')
         
         # Add missing columns if upgrading from older schema
         try:
             c.execute("ALTER TABLE jumps ADD COLUMN formula_peak_power REAL")
         except sqlite3.OperationalError:
-            pass  # Column already exists
+            pass
         try:
             c.execute("ALTER TABLE jumps ADD COLUMN formula_avg_power REAL")
         except sqlite3.OperationalError:
             pass
         try:
             c.execute("ALTER TABLE jumps ADD COLUMN velocity_flight REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN contact_time REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN contact_start_time REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN contact_end_time REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN curve_start_time REAL")
         except sqlite3.OperationalError:
             pass
             
@@ -60,15 +85,20 @@ class DatabaseHandler:
             curve_json,
             jump_data.get("formula_peak_power"),
             jump_data.get("formula_avg_power"),
-            jump_data.get("velocity_flight")
+            jump_data.get("velocity_flight"),
+            jump_data.get("contact_time"),
+            jump_data.get("contact_start_time"),
+            jump_data.get("contact_end_time"),
+            jump_data.get("curve_start_time")
         )
         
         c = self.conn.cursor()
         c.execute('''INSERT INTO jumps 
                   (timestamp, height_flight, height_impulse, peak_power, avg_power, 
                    flight_time, jumper_weight, velocity_takeoff, max_force, force_curve,
-                   formula_peak_power, formula_avg_power, velocity_flight)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
+                   formula_peak_power, formula_avg_power, velocity_flight, contact_time,
+                   contact_start_time, contact_end_time, curve_start_time)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
         self.conn.commit()
         return c.lastrowid
 
@@ -101,8 +131,16 @@ class DatabaseHandler:
                 "force_curve": [],
                 "formula_peak_power": get_val("formula_peak_power"),
                 "formula_avg_power": get_val("formula_avg_power"),
-                "velocity_flight": get_val("velocity_flight")
+                "velocity_flight": get_val("velocity_flight"),
+                "contact_time": get_val("contact_time"),
+                "contact_start_time": get_val("contact_start_time"),
+                "contact_end_time": get_val("contact_end_time"),
+                "curve_start_time": get_val("curve_start_time")
             }
+            
+            # Remove None values to avoid 'contact_time' in j being true for None
+            if j["contact_time"] is None:
+                del j["contact_time"]
             
             curve_str = get_val("force_curve")
             if curve_str:
@@ -118,3 +156,14 @@ class DatabaseHandler:
         c = self.conn.cursor()
         c.execute("DELETE FROM jumps")
         self.conn.commit()
+
+    def save_setting(self, key, value):
+        c = self.conn.cursor()
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        self.conn.commit()
+
+    def load_setting(self, key, default=None):
+        c = self.conn.cursor()
+        c.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = c.fetchone()
+        return row[0] if row else default

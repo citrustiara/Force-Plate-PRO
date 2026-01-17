@@ -2,7 +2,7 @@
 Main menu UI layout.
 """
 import dearpygui.dearpygui as dpg
-from .callbacks import show_single_jump, show_jump_estimation
+from .callbacks import show_single_jump, show_jump_estimation, show_contact_time
 
 
 def create_main_menu():
@@ -19,14 +19,12 @@ def create_main_menu():
                 dpg.add_spacer(height=10)
                 dpg.add_button(label="CONTINUOUS JUMP", width=150, height=30, enabled=False)
                 dpg.add_spacer(height=10)
-                dpg.add_button(label="CONTACT TIME", width=150, height=30, enabled=False)
+                dpg.add_button(label="CONTACT TIME", width=150, height=30, callback=show_contact_time)
                 dpg.add_spacer(height=10)
                 dpg.add_button(label="JUMP EST. (BETA)", width=150, height=30, callback=show_jump_estimation)
                 dpg.add_spacer(height=50)
                 dpg.add_button(label="DEADLIFT", width=150, height=30, enabled=False)
                 dpg.add_spacer(height=10)
                 dpg.add_button(label="POWER CLEAN", width=150, height=30, enabled=False)
-                dpg.add_spacer(height=10)
-                dpg.add_button(label="SQUAT", width=150, height=30, enabled=False)
                 dpg.add_spacer(height=10)
                 dpg.add_button(label="SQUAT", width=150, height=30, enabled=False)

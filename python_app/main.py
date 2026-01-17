@@ -26,10 +26,20 @@ from ui.shared import create_shared_content
 
 def main():
     # --- INITIALIZATION ---
-    config = {"gravity": 9.81, "frequency": 1200}
-    physics = PhysicsEngine(config)
-    serial_handler = SerialHandler(physics)
     db = DatabaseHandler("jumps_data.db")
+    
+    # Load settings from DB
+    saved_raw_per_kg = db.load_setting("raw_per_kg")
+    
+    config = {"gravity": 9.80665, "frequency": 1288}
+    if saved_raw_per_kg:
+        config["raw_per_kg"] = float(saved_raw_per_kg)
+        print(f"Loaded raw_per_kg from DB: {config['raw_per_kg']}")
+        
+    physics = PhysicsEngine(config)
+    physics.on_calib_callback = lambda val: db.save_setting("raw_per_kg", val)
+    
+    serial_handler = SerialHandler(physics)
 
     # Load existing history
     jump_history = db.load_history()
@@ -48,7 +58,7 @@ def main():
         create_shared_content()
 
     # --- MAIN LOOP ---
-    dpg.create_viewport(title='Force Plate PRO', width=1600, height=1000)
+    dpg.create_viewport(title='ForcePlatePRO', width=1600, height=1000)
     dpg.setup_dearpygui()
     dpg.show_viewport()
     dpg.set_primary_window("Primary Window", True)
@@ -66,6 +76,7 @@ def main():
         # 1. Update Metrics Trigger
         is_est = dpg.get_item_configuration("group_header_estimation")["show"]
         is_single = dpg.get_item_configuration("group_header_single")["show"]
+        is_contact = dpg.get_item_configuration("group_header_contact_time")["show"]
         
         # State / Mass updates
         if is_single:
@@ -74,14 +85,28 @@ def main():
         if is_est:
             dpg.set_value("met_e_state", physics.state)
             dpg.set_value("met_e_mass", f"{physics.jumper_mass_kg:.1f} kg")
+        if is_contact:
+            dpg.set_value("met_c_state", physics.state)
 
         # 2. History List Update
         current_items = dpg.get_item_configuration("list_history")["items"]
+        
+        # Filter history by mode
+        if is_single:
+            filtered_history = [j for j in jump_history if j.get('formula_peak_power') is not None]
+        elif is_contact:
+            filtered_history = [j for j in jump_history if 'contact_time' in j]
+        elif is_est:
+            filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j]
+        else:
+            filtered_history = jump_history
+
         target_items = [
             f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
-            if j.get('height_flight', 0) > 0 
-            else f"#{j['_id']}: Imp {j['height_impulse']:.1f}cm" 
-            for j in jump_history
+            if (j.get('height_flight') or 0) > 0 
+            else f"#{j['_id']}: CT {j.get('contact_time', 0):.0f}ms" if 'contact_time' in j
+            else f"#{j['_id']}: Imp {j.get('height_impulse', 0):.1f}cm" 
+            for j in filtered_history
         ]
         
         if len(current_items) != len(target_items) or (len(current_items) > 0 and current_items[0] != target_items[0]):
@@ -112,6 +137,10 @@ def main():
                  dpg.set_value("met_e_peak_force", safe_fmt(selected_jump.get('max_force'), 'kg'))
                  dpg.set_value("met_e_vel", safe_fmt(selected_jump.get('velocity_takeoff'), 'm/s', ".2f"))
                  
+            if is_contact:
+                 dpg.set_value("met_c_contact_time", safe_fmt(selected_jump.get('contact_time'), 'ms', ".0f"))
+                 dpg.set_value("met_c_max_force", safe_fmt(selected_jump.get('max_force'), 'kg'))
+                 
         else:
             # Clear metrics
             if is_single:
@@ -133,6 +162,10 @@ def main():
                  dpg.set_value("met_e_mean_pwr", "--")
                  dpg.set_value("met_e_peak_force", "--")
                  dpg.set_value("met_e_vel", "--")
+            
+            if is_contact:
+                dpg.set_value("met_c_contact_time", "--")
+                dpg.set_value("met_c_max_force", "--")
 
         # 4. Live Plot with Averaging
         if not selected_jump:
@@ -152,9 +185,9 @@ def main():
                         # Reshape and average
                         xs_raw = data[:trimmed_len, 0].reshape(n_groups, downsample_factor).mean(axis=1)
                         ys = data[:trimmed_len, 1].reshape(n_groups, downsample_factor).mean(axis=1)
-                        xs = (xs_raw - data[-1, 0]) / 1000.0
+                        xs = (xs_raw - data[-1, 0]) / 1000.0 + 5
                     else:
-                        xs = (data[:, 0] - data[-1, 0]) / 1000.0
+                        xs = (data[:, 0] - data[-1, 0]) / 1000.0 + 5
                         ys = data[:, 1]
                     
                     xs = np.ascontiguousarray(xs)
@@ -168,8 +201,15 @@ def main():
                     else:
                         dpg.set_value("plot_line_series_mass", [[], []])
 
-                    dpg.set_value("plot_line_series_power", [[], []])
-                    dpg.set_value("plot_line_series_vel", [[], []])
+                    if is_contact:
+                        dpg.set_value("plot_line_series_power", [[], []])
+                        dpg.set_value("plot_line_series_vel", [[], []])
+                    else:
+                        dpg.set_value("plot_line_series_power", [[], []])
+                        dpg.set_value("plot_line_series_vel", [[], []])
+                    
+                    dpg.set_value("plot_line_series_ct_start", [[], []])
+                    dpg.set_value("plot_line_series_ct_end", [[], []])
                     
                     dpg.fit_axis_data("x_axis")
                     if auto_fit_y:
@@ -180,14 +220,20 @@ def main():
         
         # 5. Selected Jump Display
         if selected_jump:
-            curr_p_x = dpg.get_value("plot_line_series_power")[0]
+            p_val = dpg.get_value("plot_line_series_power")
+            curr_p_x = p_val[0] if p_val and len(p_val) > 0 else []
             if len(curr_p_x) == 0: 
-                curve = selected_jump['force_curve']
+                curve = selected_jump.get('force_curve')
                 if curve:
                     xs = [(p['t'] - curve[0]['t'])/1000.0 for p in curve]
                     ys = [p['v'] for p in curve] 
-                    ps = [p['p'] for p in curve] 
-                    vs = [p.get('vel', 0) for p in curve] 
+                    
+                    # Check if power and velocity are present
+                    has_power = all(p.get('p') is not None for p in curve)
+                    has_vel = all(p.get('vel') is not None for p in curve)
+
+                    ps = [p.get('p', 0) for p in curve] if has_power else []
+                    vs = [p.get('vel', 0) for p in curve] if has_vel else []
                     
                     xs = np.ascontiguousarray(xs)
                     ys = np.ascontiguousarray(ys)
@@ -202,8 +248,22 @@ def main():
                     else:
                        dpg.set_value("plot_line_series_mass", [[], []])
 
-                    dpg.set_value("plot_line_series_power", [xs, ps])
-                    dpg.set_value("plot_line_series_vel", [xs, vs])
+                    dpg.set_value("plot_line_series_power", [xs, ps] if has_power else [[], []])
+                    dpg.set_value("plot_line_series_vel", [xs, vs] if has_vel else [[], []])
+                    
+                    # --- Contact Time Markers ---
+                    t_start = selected_jump.get('contact_start_time')
+                    t_end = selected_jump.get('contact_end_time')
+                    t_curv = selected_jump.get('curve_start_time')
+                    if t_start and t_end and t_curv:
+                        x_s = (t_start - t_curv) / 1000.0
+                        x_e = (t_end - t_curv) / 1000.0
+                        max_y = np.max(ys) if len(ys) > 0 else 200
+                        dpg.set_value("plot_line_series_ct_start", [[x_s, x_s], [0, max_y]])
+                        dpg.set_value("plot_line_series_ct_end", [[x_e, x_e], [0, max_y]])
+                    else:
+                        dpg.set_value("plot_line_series_ct_start", [[], []])
+                        dpg.set_value("plot_line_series_ct_end", [[], []])
                     
                     dpg.fit_axis_data("x_axis")
                     dpg.fit_axis_data("y_axis")

@@ -4,8 +4,7 @@ Jump Estimation Mode - User inputs bodyweight manually, results based on impulse
 from .base import (
     PhysicsMode, 
     AIR_THRESHOLD, 
-    STABILITY_TOLERANCE_KG,
-    GRAVITY
+    STABILITY_TOLERANCE_KG
 )
 
 
@@ -66,49 +65,47 @@ class JumpEstimationMode(PhysicsMode):
         if weight < AIR_THRESHOLD:
             # IN AIR
             if self.state == "PROPULSION":
-                 # TAKEOFF!
-                 # Add start velocity
-                 self.last_takeoff_velocity = self.current_velocity + self.manual_start_velocity
-                 
-                 # Calculate Impulse Height immediately
-                 h_impulse = (self.last_takeoff_velocity**2) / (2 * gravity) * 1000.0
-                 
-                 # Calculate Flight Time from Impulse
-                 # t = 2 * v / g
-                 flight_time_estimated_ms = (2 * self.last_takeoff_velocity / gravity) * 1000.0
-                 
-                 curve = engine.generate_power_curve(
-                     self.jump_start_y, 
-                     self.integration_start_time, 
-                     self.manual_mass_kg, 
-                     start_velocity=self.manual_start_velocity
-                 )
-                 
-                 avg_p = 0
-                 if self.power_sample_count > 0:
-                        avg_p = self.sum_power / self.power_sample_count
-                        
-                 result = {
-                    "timestamp": now,
-                    "flight_time": flight_time_estimated_ms,  # Estimated from Impulse
-                    "height_flight": None,
-                    "height_impulse": h_impulse,
-                    "peak_power": self.peak_power,
-                    "avg_power": avg_p,
-                    "formula_peak_power": None,
-                    "formula_avg_power": None,
-                    "velocity_takeoff": self.last_takeoff_velocity,
-                    "velocity_flight": None,
-                    "max_force": self.max_propulsion_force / gravity,
-                    "jumper_weight": self.manual_mass_kg,
-                    "force_curve": curve,
-                    "avg_power_start_time": self.integration_start_time
-                 }
-                 
-                 self.state = "IN_AIR" 
-            
-            elif self.state == "READY":
-                 self.state = "READY"
+                # Add start velocity
+                self.last_takeoff_velocity = self.current_velocity + self.manual_start_velocity
+                if self.last_takeoff_velocity > 0:
+                    # Calculate Impulse Height immediately
+                    h_impulse = (self.last_takeoff_velocity**2) / (2 * gravity) * 100.0
+                    
+                    # Calculate Flight Time from Impulse
+                    # t = 2 * v / g
+                    flight_time_estimated_ms = (2 * self.last_takeoff_velocity / gravity) * 1000.0
+                    
+                    curve = engine.generate_power_curve(
+                        self.jump_start_y, 
+                        self.integration_start_time, 
+                        self.manual_mass_kg, 
+                        start_velocity=self.manual_start_velocity
+                    )
+                    
+                    avg_p = 0
+                    if self.power_sample_count > 0:
+                            avg_p = self.sum_power / self.power_sample_count
+                            
+                    result = {
+                        "timestamp": now,
+                        "flight_time": flight_time_estimated_ms,  # Estimated from Impulse
+                        "height_flight": None,
+                        "height_impulse": h_impulse,
+                        "peak_power": self.peak_power,
+                        "avg_power": avg_p,
+                        "formula_peak_power": None,
+                        "formula_avg_power": None,
+                        "velocity_takeoff": self.last_takeoff_velocity,
+                        "velocity_flight": None,
+                        "max_force": self.max_propulsion_force / gravity,
+                        "jumper_weight": self.manual_mass_kg,
+                        "force_curve": curve,
+                        "avg_power_start_time": self.integration_start_time
+                    }
+                    
+                    self.state = "IN_AIR"
+                else:
+                    self.state = "READY"
 
         elif weight >= AIR_THRESHOLD:
             # ON GROUND

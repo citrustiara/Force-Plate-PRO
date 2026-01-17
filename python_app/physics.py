@@ -1,17 +1,17 @@
 import numpy as np
-import time
-from modes import SingleJumpMode, JumpEstimationMode
+from modes import SingleJumpMode, JumpEstimationMode, ContactTimeMode
+from modes.base import AIR_THRESHOLD
 
 # Constants
-GRAVITY = 9.81
-BUFFER_SIZE = 10000  # ~8-10 seconds at 1200Hz
+GRAVITY = 9.80665
+BUFFER_SIZE = 10000  # ~8s
 
 class PhysicsEngine:
     def __init__(self, config=None):
         self.config = {
             "gravity": GRAVITY,
-            "raw_per_kg": 12560.0,
-            "frequency": 1280,
+            "raw_per_kg": 12822.594604545637,
+            "frequency": 1288,
         }
         if config:
             self.config.update(config)
@@ -33,12 +33,21 @@ class PhysicsEngine:
         self.tare_count = 0
         self.is_taring = False
         
+        # Calibration Logic
+        self.is_calibrating = False
+        self.calib_weight_kg = 0.0
+        self.calib_start_time = 0.0
+        self.calib_sum = 0.0
+        self.calib_count = 0
+        
         # Modes
         self.modes = {
             "Single Jump": SingleJumpMode(self),
-            "Jump Estimation": JumpEstimationMode(self)
+            "Jump Estimation": JumpEstimationMode(self),
+            "Contact Time": ContactTimeMode(self)
         }
         self.active_mode = self.modes["Single Jump"]
+        self.on_calib_callback = None
 
     def set_mode(self, mode_name):
         if mode_name in self.modes:
@@ -54,6 +63,9 @@ class PhysicsEngine:
         self.tare_sum = 0
         self.tare_count = 0
         self.is_taring = False
+        self.is_calibrating = False
+        self.calib_sum = 0
+        self.calib_count = 0
         self.active_mode.reset_state()
 
     def reset(self):
@@ -87,10 +99,39 @@ class PhysicsEngine:
         self.tare_sum += raw
         self.tare_count += 1
         
-        if now - self.tare_start_time >= 600:
+        if now - self.tare_start_time >= 200:
             if self.tare_count > 0:
                 self.zero_offset = self.tare_sum / self.tare_count
             self.is_taring = False
+            self.reset_state()
+
+    def start_calibrate(self, known_weight_kg):
+        self.is_calibrating = True
+        self.calib_weight_kg = known_weight_kg
+        self.calib_start_time = 0
+        self.calib_sum = 0
+        self.calib_count = 0
+        print(f"Calibration started for {known_weight_kg}kg")
+
+    def calculate_calibration_logic(self, raw, now):
+        if self.calib_start_time == 0:
+            self.calib_start_time = now
+            self.calib_sum = 0
+            self.calib_count = 0
+        
+        self.calib_sum += raw
+        self.calib_count += 1
+        
+        if now - self.calib_start_time >= 300: # 500ms for more stability
+            if self.calib_count > 0 and self.calib_weight_kg > 0:
+                avg_raw = self.calib_sum / self.calib_count
+                diff_raw = avg_raw - self.zero_offset
+                if diff_raw > 0:
+                    self.config["raw_per_kg"] = diff_raw / self.calib_weight_kg
+                    print(f"Calibration complete. New raw_per_kg: {self.config['raw_per_kg']}")
+                    if self.on_calib_callback:
+                        self.on_calib_callback(self.config["raw_per_kg"])
+            self.is_calibrating = False
             self.reset_state()
 
     def add_to_buffer(self, t, w, u):
@@ -170,6 +211,16 @@ class PhysicsEngine:
                 "result": None
             }
             
+        # Calibration Logic Intercept
+        if self.is_calibrating:
+            self.calculate_calibration_logic(raw, now)
+            display_kg = (raw - self.zero_offset) / self.config["raw_per_kg"]
+            return {
+                "state": "CALIBRATING",
+                "kg": display_kg,
+                "display_kg": display_kg,
+                "result": None
+            }
         # Delegate to Mode
         result_dict = self.active_mode.process_sample(raw, timestamp, micros, now, dt)
         
@@ -193,12 +244,9 @@ class PhysicsEngine:
         
         v = 0.0 # Accumulator for Delta V
         # Actual velocity at any point is start_velocity + v
-        
         last_u = relevant[0][2] if len(relevant) > 0 else 0
         
         curve = []
-        
-        # AIR_THRESHOLD = 90000 
         
         for i in range(len(relevant)):
             sample = relevant[i]
@@ -218,14 +266,13 @@ class PhysicsEngine:
             p = 0.0
             force_n = force_kg * self.config["gravity"]
             
-            # Helper for actual velocity
             current_v = 0.0
             
             if t >= integration_start_time:
                 effective_force_kg = force_kg
                 
                 # Check AIR_THRESHOLD logic for consistency?
-                if effective_force_kg * self.config["raw_per_kg"] < 90000:
+                if effective_force_kg * self.config["raw_per_kg"] < AIR_THRESHOLD:
                     effective_force_kg = 0 
                 
                 force_n = effective_force_kg * self.config["gravity"]

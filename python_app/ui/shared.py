@@ -7,10 +7,12 @@ from .callbacks import (
     toggle_autofit, 
     clear_history_callback, 
     delete_selected_jump_callback, 
-    history_click_callback
+    history_click_callback,
+    calibrate_callback
 )
 from .single_jump import create_single_jump_header
 from .jump_estimation import create_jump_estimation_header
+from .contact_time import create_contact_time_header
 
 
 def create_shared_content():
@@ -20,6 +22,7 @@ def create_shared_content():
         # Mode-specific headers
         create_single_jump_header()
         create_jump_estimation_header()
+        create_contact_time_header()
         
         dpg.add_separator()
         
@@ -37,6 +40,12 @@ def create_shared_content():
                         dpg.add_line_series([], [], label="Force", tag="plot_line_series")
                         dpg.add_line_series([], [], label="Jumper Mass", tag="plot_line_series_mass")
                         dpg.bind_item_theme("plot_line_series_mass", "theme_mass_line")
+                        
+                        # Contact Time Markers
+                        dpg.add_line_series([], [], label="CT Start", tag="plot_line_series_ct_start")
+                        dpg.add_line_series([], [], label="CT End", tag="plot_line_series_ct_end")
+                        dpg.bind_item_theme("plot_line_series_ct_start", "theme_ct_marker")
+                        dpg.bind_item_theme("plot_line_series_ct_end", "theme_ct_marker")
                     
                     with dpg.plot_axis(dpg.mvYAxis, label="Power (W)", tag="y_axis_power"):
                         dpg.add_line_series([], [], label="Power", tag="plot_line_series_power", parent="y_axis_power")
@@ -51,6 +60,10 @@ def create_shared_content():
                     dpg.add_button(label="TARE", callback=tare_callback, width=60)
                     dpg.add_checkbox(label="AutoY", default_value=True, callback=toggle_autofit)
                 
+                dpg.add_spacer(height=5)
+                with dpg.group(horizontal=True):
+                    dpg.add_input_float(tag="input_calib_weight", default_value=20.0, width=80, format="%.1f kg")
+                    dpg.add_button(label="CALIBRATE", callback=calibrate_callback, width=80)
                 dpg.add_spacer(height=10)
                 dpg.add_separator()
                 dpg.add_text("History")

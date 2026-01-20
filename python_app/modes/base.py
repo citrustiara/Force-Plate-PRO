@@ -4,7 +4,7 @@ Base physics mode class and shared constants.
 
 
 # Constants - logic specific
-AIR_THRESHOLD = 200000
+AIR_THRESHOLD = 90000
 MOVEMENT_THRESHOLD = 26000
 STABILITY_TOLERANCE_KG = 0.5
 MAX_PROPULSION_TIME_MS = 100000

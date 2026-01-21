@@ -15,12 +15,29 @@ def setup_themes():
 
     dpg.bind_theme(global_theme)
 
-    # Mass Line Theme (Yellow)
+    # Individual Series Themes
+    
+    # Force Line Theme (Electric Blue)
+    with dpg.theme(tag="theme_force_line"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (0, 191, 255), category=dpg.mvThemeCat_Core)
+
+    # Power Line Theme (Neon Green)
+    with dpg.theme(tag="theme_power_line"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (57, 255, 20), category=dpg.mvThemeCat_Core)
+
+    # Velocity Line Theme (Vivid Magenta)
+    with dpg.theme(tag="theme_vel_line"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 0, 255), category=dpg.mvThemeCat_Core)
+
+    # Mass Line Theme (Bright Yellow)
     with dpg.theme(tag="theme_mass_line"):
         with dpg.theme_component(dpg.mvLineSeries):
             dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 255, 0), category=dpg.mvThemeCat_Core)
 
-    # Contact Time Marker Theme (Orange)
+    # Contact Time Marker Theme (Bright Orange)
     with dpg.theme(tag="theme_ct_marker"):
         with dpg.theme_component(dpg.mvLineSeries):
-            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 165, 0), category=dpg.mvThemeCat_Core)
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 128, 0), category=dpg.mvThemeCat_Core)

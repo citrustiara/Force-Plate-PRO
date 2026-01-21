@@ -18,7 +18,8 @@ from ui.callbacks import (
     set_selected_jump,
     get_jump_history,
     is_autofit_enabled,
-    safe_fmt
+    safe_fmt,
+    update_current_plot_data
 )
 from ui.main_menu import create_main_menu
 from ui.shared import create_shared_content
@@ -210,6 +211,9 @@ def main():
                     
                     dpg.set_value("plot_line_series_ct_start", [[], []])
                     dpg.set_value("plot_line_series_ct_end", [[], []])
+
+                    # Update current plot data for hover
+                    update_current_plot_data(xs, ys, [], [])
                     
                     dpg.fit_axis_data("x_axis")
                     if auto_fit_y:
@@ -265,6 +269,9 @@ def main():
                         dpg.set_value("plot_line_series_ct_start", [[], []])
                         dpg.set_value("plot_line_series_ct_end", [[], []])
                     
+                    # Update current plot data for hover
+                    update_current_plot_data(xs, ys, ps if has_power else [], vs if has_vel else [])
+
                     dpg.fit_axis_data("x_axis")
                     dpg.fit_axis_data("y_axis")
                     dpg.fit_axis_data("y_axis_power")

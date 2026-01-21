@@ -11,6 +11,12 @@ _db = None
 _jump_history = None
 _selected_jump = None
 _auto_fit_y = True
+_current_plot_data = {
+    "x": [],
+    "y": [],
+    "p": [],
+    "v": []
+}
 
 
 def setup_callbacks(physics, serial_handler, db, jump_history_ref):
@@ -111,6 +117,10 @@ def clear_history_callback():
     global _jump_history
     _db.clear()
     _jump_history.clear()
+    _current_plot_data["x"] = []
+    _current_plot_data["y"] = []
+    _current_plot_data["p"] = []
+    _current_plot_data["v"] = []
     dpg.configure_item("list_history", items=[])
     dpg.configure_item("plot_line_series", x=[], y=[])
     dpg.configure_item("plot_line_series_power", x=[], y=[])
@@ -191,6 +201,11 @@ def history_click_callback(sender, app_data):
                 dpg.configure_item("plot_line_series_power", x=xs if has_power else [], y=ps if has_power else [])
                 dpg.configure_item("plot_line_series_vel", x=xs if has_vel else [], y=vs if has_vel else [])
                 
+                _current_plot_data["x"] = xs
+                _current_plot_data["y"] = ys
+                _current_plot_data["p"] = ps if has_power else []
+                _current_plot_data["v"] = vs if has_vel else []
+                
                 # --- Mass line update ---
                 mass = target.get('jumper_weight', 0)
                 if mass > 0 and len(xs) > 0:
@@ -228,6 +243,63 @@ def history_click_callback(sender, app_data):
             
     except Exception as e:
         print(f"Error in history_click_callback: {e}")
+
+
+def update_current_plot_data(x, y, p, v):
+    """External helper to update the tracked plot data."""
+    global _current_plot_data
+    _current_plot_data["x"] = x
+    _current_plot_data["y"] = y
+    _current_plot_data["p"] = p
+    _current_plot_data["v"] = v
+
+
+def plot_mouse_move_callback(sender, app_data):
+    """Handle mouse movement on the plot for sticky cursor."""
+    global _current_plot_data
+    
+    # Check if sticky cursor is enabled
+    is_sticky = dpg.get_value("check_sticky_cursor")
+    
+    if not is_sticky or not dpg.is_item_hovered("main_plot"):
+        dpg.configure_item("plot_cursor_v", show=False)
+        dpg.configure_item("plot_cursor_h", show=False)
+        dpg.configure_item("plot_cursor_text", show=False)
+        return
+
+    mouse_pos = dpg.get_plot_mouse_pos()
+    mx, my = mouse_pos
+    
+    xs = _current_plot_data["x"]
+    if len(xs) == 0:
+        dpg.configure_item("plot_cursor_v", show=False)
+        dpg.configure_item("plot_cursor_h", show=False)
+        dpg.configure_item("plot_cursor_text", show=False)
+        return
+
+    # Find nearest index
+    idx = np.argmin(np.abs(xs - mx))
+    
+    # Snap to data point
+    snapped_x = xs[idx]
+    snapped_y = _current_plot_data["y"][idx]
+    
+    dpg.configure_item("plot_cursor_v", show=True)
+    dpg.configure_item("plot_cursor_h", show=True)
+    dpg.configure_item("plot_cursor_text", show=True)
+    
+    dpg.set_value("plot_cursor_v", snapped_x)
+    dpg.set_value("plot_cursor_h", snapped_y)
+    
+    # Info text
+    info = f"Time: {snapped_x:.3f}s\nForce: {snapped_y:.1f}kg"
+    if len(_current_plot_data["p"]) > idx:
+        info += f"\nPower: {_current_plot_data['p'][idx]:.0f}W"
+    if len(_current_plot_data["v"]) > idx:
+        info += f"\nVelocity: {_current_plot_data['v'][idx]:.2f}m/s"
+        
+    dpg.configure_item("plot_cursor_text", label=info)
+    dpg.set_value("plot_cursor_text", [snapped_x, snapped_y])
 
 
 def reset_view_callback():

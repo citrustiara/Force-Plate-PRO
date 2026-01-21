@@ -326,8 +326,8 @@ class SingleJumpMode(PhysicsMode):
                             self.block_sum += display_kg
                             self.block_count += 1
                             
-                            if self.block_count >= 30:
-                                avg = self.block_sum / 30.0
+                            if self.block_count >= 20:
+                                avg = self.block_sum / 20.0
                                 self.block_averages.append(avg)
                                 self.block_sum = 0
                                 self.block_count = 0
@@ -342,18 +342,14 @@ class SingleJumpMode(PhysicsMode):
                                     noise_kg = b_max - b_min
                                     
                                     # Check stability and bodyweight
-                                    # Using slightly looser tolerance for bodyweight check in dynamic phase ??
-                                    # User said "around current bodyweight"
-                                    # STABILITY_TOLERANCE_KG is 0.5kg usually
+                                    # Using slightly looser tolerance for bodyweight check
+                                    # STABILITY_TOLERANCE_KG is 0.5kg
                                     
                                     avg_val = sum(self.block_averages) / len(self.block_averages)
                                     diff_bw = abs(avg_val - self.jumper_mass_kg)
                                     
-                                    if noise_kg <= STABILITY_TOLERANCE_KG and diff_bw <= STABILITY_TOLERANCE_KG * 4: 
-                                        # *4 tolerance (2kg) because landing might be slightly noisy/off but stable enough to exit
-                                        # Or strict tolerance? User said "around current bodyweight".
-                                        # Let's stick to provided tolerance or slightly larger.
-                                        # Let's use 2.0kg for bodyweight proximity to be safe, but keep noise strict.
+                                    if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG * 5: 
+                                        
                                         
                                         self.state = "READY"
                                         self.current_velocity = 0

@@ -353,6 +353,57 @@ def show_single_jump(sender=None, app_data=None):
     dpg.hide_item("plot_line_series_ct_end")
 
 
+def show_box_drop(sender=None, app_data=None):
+    """Switch to Box Drop mode (using Single Jump UI for now)."""
+    _physics.set_mode("Box Drop")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.show_item("group_header_single")
+    dpg.hide_item("group_header_estimation")
+    dpg.hide_item("group_header_contact_time")
+    
+    dpg.show_item("plot_line_series")
+    dpg.show_item("plot_line_series_mass")
+    dpg.show_item("plot_line_series_power")
+    dpg.show_item("plot_line_series_vel")
+    dpg.hide_item("plot_line_series_ct_start")
+    dpg.hide_item("plot_line_series_ct_end")
+
+
+def show_box_drop_jump(sender=None, app_data=None):
+    """Switch to Box Drop Jump mode (using Single Jump UI for now)."""
+    _physics.set_mode("Box Drop Jump")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.show_item("group_header_single")
+    dpg.hide_item("group_header_estimation")
+    dpg.hide_item("group_header_contact_time")
+    
+    dpg.show_item("plot_line_series")
+    dpg.show_item("plot_line_series_mass")
+    dpg.show_item("plot_line_series_power")
+    dpg.show_item("plot_line_series_vel")
+    dpg.hide_item("plot_line_series_ct_start")
+    dpg.hide_item("plot_line_series_ct_end")
+
+
+def show_push_up(sender=None, app_data=None):
+    """Switch to Push Up mode (using Single Jump UI for now)."""
+    _physics.set_mode("Push Up")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.show_item("group_header_single")
+    dpg.hide_item("group_header_estimation")
+    dpg.hide_item("group_header_contact_time")
+    
+    dpg.show_item("plot_line_series")
+    dpg.show_item("plot_line_series_mass")
+    dpg.show_item("plot_line_series_power")
+    dpg.show_item("plot_line_series_vel")
+    dpg.hide_item("plot_line_series_ct_start")
+    dpg.hide_item("plot_line_series_ct_end")
+
+
 def show_jump_estimation(sender=None, app_data=None):
     """Switch to Jump Estimation mode."""
     _physics.set_mode("Jump Estimation")

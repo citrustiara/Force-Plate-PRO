@@ -43,6 +43,12 @@ class PhysicsEngine:
         # Modes
         self.modes = {
             "Single Jump": SingleJumpMode(self),
+            "Box Drop": SingleJumpMode(self),
+            "Box Drop Jump": SingleJumpMode(self),
+            "Push Up": SingleJumpMode(self),
+            "Squat": SingleJumpMode(self),
+            "Deadlift": SingleJumpMode(self),
+            "Power Clean": SingleJumpMode(self),
             "Jump Estimation": JumpEstimationMode(self),
             "Contact Time": ContactTimeMode(self)
         }

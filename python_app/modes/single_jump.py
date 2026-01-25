@@ -161,7 +161,7 @@ class SingleJumpMode(PhysicsMode):
             if self.pending_result_data is not None:
                 # Force emit result now because we are leaving the ground
                 d = self.pending_result_data
-                t_start = d["graph_start_time_y"] - 500
+                t_start = d["graph_start_time_y"] - 750
                 curve = engine.generate_power_curve(
                     t_start, 
                     d["avg_power_start_time"], 
@@ -308,7 +308,7 @@ class SingleJumpMode(PhysicsMode):
                         # Exit Condition (PROPULSION)
                         diff_mass = abs(display_kg - self.jumper_mass_kg)
                         if self.state == "PROPULSION":
-                            if diff_mass < 4*STABILITY_TOLERANCE_KG:
+                            if diff_mass < 2*STABILITY_TOLERANCE_KG:
                                 if self.propulsion_stability_start_time == 0:
                                     self.propulsion_stability_start_time = now
                                 elif now - self.propulsion_stability_start_time > 250:

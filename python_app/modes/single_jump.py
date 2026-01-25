@@ -123,7 +123,7 @@ class SingleJumpMode(PhysicsMode):
                         "graph_start_velocity": self.phase_start_velocity,
                         "graph_start_time_y": self.jump_start_y
                     }
-                    self.result_emit_time = now + 300 # Wait 300ms to capture landing
+                    self.result_emit_time = now + 600 # Wait 600ms to capture landing
                     
                     # --- 2. PREPARE FOR REBOUND (Continuity) ---
                     # Impact logic
@@ -161,7 +161,7 @@ class SingleJumpMode(PhysicsMode):
             if self.pending_result_data is not None:
                 # Force emit result now because we are leaving the ground
                 d = self.pending_result_data
-                t_start = d["graph_start_time_y"] - 1000
+                t_start = d["graph_start_time_y"] - 500
                 curve = engine.generate_power_curve(
                     t_start, 
                     d["avg_power_start_time"], 
@@ -243,7 +243,7 @@ class SingleJumpMode(PhysicsMode):
                 if self.state == "LANDING" and self.pending_result_data is not None:
                    if now >= self.result_emit_time:
                        d = self.pending_result_data
-                       t_start = d["graph_start_time_y"] - 1000
+                       t_start = d["graph_start_time_y"] - 500
                        # Graph includes landing phase now
                        curve = engine.generate_power_curve(
                            t_start, 
@@ -308,7 +308,7 @@ class SingleJumpMode(PhysicsMode):
                         # Exit Condition (PROPULSION)
                         diff_mass = abs(display_kg - self.jumper_mass_kg)
                         if self.state == "PROPULSION":
-                            if diff_mass < STABILITY_TOLERANCE_KG:
+                            if diff_mass < 4*STABILITY_TOLERANCE_KG:
                                 if self.propulsion_stability_start_time == 0:
                                     self.propulsion_stability_start_time = now
                                 elif now - self.propulsion_stability_start_time > 250:
@@ -348,7 +348,7 @@ class SingleJumpMode(PhysicsMode):
                                     avg_val = sum(self.block_averages) / len(self.block_averages)
                                     diff_bw = abs(avg_val - self.jumper_mass_kg)
                                     
-                                    if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG * 5: 
+                                    if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
                                         
                                         
                                         self.state = "READY"
@@ -359,7 +359,7 @@ class SingleJumpMode(PhysicsMode):
                                         self.phase_start_velocity = 0.0
                                         self.pending_result_data = None # Stop any pending emission if we settled
 
-                    if now - self.integration_start_time > 5000:
+                    if now - self.integration_start_time > MAX_PROPULSION_TIME_MS:
                          self.state = "READY"
                          self.current_velocity = 0
                          self.peak_power = 0

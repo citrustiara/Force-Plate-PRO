@@ -81,7 +81,20 @@ def main():
         
         # State / Mass updates
         if is_single:
-            dpg.set_value("met_s_state", physics.state)
+            state = physics.state
+            color = (255, 255, 255) # Default White
+            if state == "READY":
+                color = (0, 255, 0) # Green
+            elif state == "WEIGHING":
+                color = (255, 255, 0) # Yellow
+            elif state == "PROPULSION":
+                color = (255, 165, 0) # Orange
+            elif state == "LANDING":
+                color = (255, 100, 100) # Light Red
+            elif state == "IN_AIR":
+                color = (0, 255, 255) # Cyan
+                
+            dpg.configure_item("met_s_state", default_value=state, color=color)
             dpg.set_value("met_s_mass", f"{physics.jumper_mass_kg:.1f} kg")
         if is_est:
             dpg.set_value("met_e_state", physics.state)

@@ -64,6 +64,10 @@ class SingleJumpController(ModeController):
                         dpg.add_text("-- N", tag="met_s_peak_force_n", color=(255, 80, 80))
                     dpg.add_spacer(width=20)
                     with dpg.group():
+                        dpg.add_text("PEAK POWER (W/kg)", color=(150, 150, 150))
+                        dpg.add_text("-- W/kg", tag="met_s_peak_pwr_w_kg", color=(255, 165, 50))
+                    dpg.add_spacer(width=20)
+                    with dpg.group():
                         dpg.add_text("VEL (Flight-Calc)", color=(150, 150, 150))
                         dpg.add_text("-- m/s", tag="met_s_vel_flight", color=(50, 200, 50))
             
@@ -115,18 +119,31 @@ class SingleJumpController(ModeController):
 
         # 2. Update Metrics if selected
         if selected_jump:
+             mass = selected_jump.get('jumper_weight', 0)
+             peak_force_kg = selected_jump.get('max_force', 0)
+             peak_pwr = selected_jump.get('peak_power', 0)
+             
+             # Conversions
+             g = physics.config["gravity"]
+             peak_force_n = peak_force_kg * g if peak_force_kg else 0
+             pwr_w_kg = peak_pwr / mass if mass > 0 else 0
+             
              dpg.set_value("met_s_height", self.safe_fmt(selected_jump.get('height_flight'), 'cm'))
              dpg.set_value("met_s_height_imp", self.safe_fmt(selected_jump.get('height_impulse'), 'cm'))
              dpg.set_value("met_s_flight", self.safe_fmt(selected_jump.get('flight_time'), 'ms', ".0f"))
-             dpg.set_value("met_s_peak_pwr", self.safe_fmt(selected_jump.get('peak_power'), 'W', ".0f"))
+             dpg.set_value("met_s_peak_pwr", self.safe_fmt(peak_pwr, 'W', ".0f"))
              dpg.set_value("met_s_peak_pwr_form", self.safe_fmt(selected_jump.get('formula_peak_power'), 'W', ".0f"))
              dpg.set_value("met_s_mean_pwr", self.safe_fmt(selected_jump.get('avg_power'), 'W', ".0f"))
              dpg.set_value("met_s_mean_pwr_form", self.safe_fmt(selected_jump.get('formula_avg_power'), 'W', ".0f"))
-             dpg.set_value("met_s_peak_force", self.safe_fmt(selected_jump.get('max_force'), 'kg'))
+             
+             dpg.set_value("met_s_peak_force", self.safe_fmt(peak_force_kg, 'kg'))
+             dpg.set_value("met_s_peak_force_n", f"{peak_force_n:.0f} N" if peak_force_n else "--")
+             
+             dpg.set_value("met_s_peak_pwr_w_kg", f"{pwr_w_kg:.1f} W/kg" if pwr_w_kg else "--")
+             
              dpg.set_value("met_s_vel", self.safe_fmt(selected_jump.get('velocity_takeoff'), 'm/s', ".2f"))
              dpg.set_value("met_s_vel_flight", self.safe_fmt(selected_jump.get('velocity_flight'), 'm/s', ".2f"))
              
-             mass = selected_jump.get('jumper_weight', 0)
              dpg.set_value("met_s_mass", f"{mass:.1f} kg" if mass else "--")
         else:
              # Clear metrics
@@ -138,6 +155,8 @@ class SingleJumpController(ModeController):
              dpg.set_value("met_s_mean_pwr", "--")
              dpg.set_value("met_s_mean_pwr_form", "--")
              dpg.set_value("met_s_peak_force", "--")
+             dpg.set_value("met_s_peak_force_n", "--")
+             dpg.set_value("met_s_peak_pwr_w_kg", "--")
              dpg.set_value("met_s_vel", "--")
              dpg.set_value("met_s_vel_flight", "--")
 

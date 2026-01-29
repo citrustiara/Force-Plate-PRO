@@ -161,7 +161,7 @@ class SingleJumpMode(PhysicsMode):
             if self.pending_result_data is not None:
                 # Force emit result now because we are leaving the ground
                 d = self.pending_result_data
-                t_start = d["graph_start_time_y"] - 750
+                t_start = d["graph_start_time_y"] - 600
                 curve = engine.generate_power_curve(
                     t_start, 
                     d["avg_power_start_time"], 
@@ -350,7 +350,7 @@ class SingleJumpMode(PhysicsMode):
                                     
                                     if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
                                         
-                                        
+                                        print("state reseted")
                                         self.state = "READY"
                                         self.current_velocity = 0
                                         self.peak_power = 0
@@ -376,51 +376,21 @@ class SingleJumpMode(PhysicsMode):
         }
 
     def _retroactive_propulsion_fix(self, now):
-        """Re-calcs velocity from buffer start based on movement threshold"""
+        """
+        Simple retroactive logic: Start integration 100 samples (~77ms) before the trigger.
+        Assumes the user was static at that point.
+        """
         engine = self.engine
         raw_per_kg = engine.config["raw_per_kg"]
         gravity = engine.config["gravity"]
         
-        curr_idx = engine.buf_idx - 1
-        if curr_idx < 0:
-            curr_idx = engine.BUFFER_SIZE - 1
+        # Fixed lookback of 100 samples
+        lookback_count = 100
+        start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
         
-        # Search for the best start point (closest to bodyweight)
-        best_start_index = curr_idx
-        min_diff = 9999.0
-        
-        scan_count = 0
-        limit = min(engine.buffer.shape[0], 600)
-        
-        while scan_count < limit:
-            scan_idx = (engine.buf_idx - 1 - scan_count) % engine.BUFFER_SIZE
-            pt = engine.buffer[scan_idx]
-            
-            if now - pt[0] > 600:
-                break  # Look back window (ms)
-                
-            diff_kg = abs(pt[1] - self.jumper_mass_kg)
-            
-            # If we find a very good match, stop early
-            if diff_kg < 0.5:
-                best_start_index = scan_idx
-                break
-            
-            # Keep track of the "most stable" point found
-            if diff_kg < min_diff:
-                min_diff = diff_kg
-                best_start_index = scan_idx
-            
-            scan_count += 1
-            
-        # Use the best point found
-        start_index = best_start_index
-        
-        # Update official start times for graph generation later
-        if start_index != curr_idx:
-             start_pt = engine.buffer[start_index]
-             self.integration_start_time = start_pt[0]
-             self.jump_start_y = start_pt[0]
+        start_pt = engine.buffer[start_index]
+        self.integration_start_time = start_pt[0]
+        self.jump_start_y = start_pt[0]
             
         self.current_velocity = 0
         self.peak_power = 0
@@ -437,6 +407,14 @@ class SingleJumpMode(PhysicsMode):
         i = start_index
         while i != engine.buf_idx:
             b = engine.buffer[i]
+            
+            # Skip empty/invalid points if near start of execution
+            if b[0] == 0:
+                 i = (i + 1) % engine.BUFFER_SIZE
+                 steps += 1
+                 if steps > lookback_count: break
+                 continue
+
             iter_dt = 1.0 / engine.config["frequency"]
             if b[2] > 0 and last_buf_micros > 0:
                 d = b[2] - last_buf_micros
@@ -467,11 +445,8 @@ class SingleJumpMode(PhysicsMode):
                 
             i = (i + 1) % engine.BUFFER_SIZE
             steps += 1
-            if steps > engine.BUFFER_SIZE:
+            if steps >= lookback_count:
                 break
-            
-        self.integration_start_time = engine.buffer[start_index][0]
-        self.jump_start_y = self.integration_start_time
         
-        # Retroactive fix assumes static start, so velocity is 0
+        # Retroactive fix assumes static start, so phase velocity is 0
         self.phase_start_velocity = 0.0

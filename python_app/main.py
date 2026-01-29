@@ -15,14 +15,13 @@ from ui.callbacks import (
     setup_callbacks, 
     on_new_jump, 
     get_selected_jump, 
-    set_selected_jump,
     get_jump_history,
-    is_autofit_enabled,
-    safe_fmt,
-    update_current_plot_data
+    is_autofit_enabled
 )
 from ui.main_menu import create_main_menu
 from ui.shared import create_shared_content
+from ui.factory import get_controller
+from ui.plot_manager import PlotManager
 
 
 def main():
@@ -58,6 +57,22 @@ def main():
         create_main_menu()
         create_shared_content()
 
+    # --- CONTROLLERS & MANAGERS ---
+    # Initial setup for specific modes
+    # We delay setup_ui calls until after DPG context is ready, which is now.
+    
+    # Pre-initialize controllers to create their UI elements (hidden by default)
+    # This ensures tags exist when we try to show/hide them.
+    # Note: create_shared_content already called the legacy header creation functions
+    # which created the groups. Our controllers expect these groups to exist.
+    # If we move fully to controllers creating UI, we would call controller.setup_ui() here.
+    # For now, we assume UI is created by create_shared_content -> create_X_header.
+    
+    plot_manager = PlotManager(physics.get_buffer_view_time_window)
+    
+    current_mode_name = physics.active_mode_name
+    current_controller = get_controller(current_mode_name)
+    
     # --- MAIN LOOP ---
     dpg.create_viewport(title='ForcePlatePRO', width=1600, height=1000)
     dpg.setup_dearpygui()
@@ -65,55 +80,51 @@ def main():
     dpg.set_primary_window("Primary Window", True)
 
     last_update = time.time()
+    last_selected_jump_id = None
+    
+    # Ensure initial state matches
+    if current_controller:
+        current_controller.on_enter()
 
     while dpg.is_dearpygui_running():
         now = time.time()
         
-        # Get current state
+        # 1. Mode Switching Check
+        if physics.active_mode_name != current_mode_name:
+            # excessive safety: ensure old controller cleans up
+            if current_controller:
+                current_controller.on_exit()
+            
+            current_mode_name = physics.active_mode_name
+            current_controller = get_controller(current_mode_name)
+            
+            if current_controller:
+                current_controller.on_enter()
+
+        # Get Common State
         selected_jump = get_selected_jump()
         jump_history = get_jump_history()
-        auto_fit_y = is_autofit_enabled()
-        
-        # 1. Update Metrics Trigger
-        is_est = dpg.get_item_configuration("group_header_estimation")["show"]
-        is_single = dpg.get_item_configuration("group_header_single")["show"]
-        is_contact = dpg.get_item_configuration("group_header_contact_time")["show"]
-        
-        # State / Mass updates
-        if is_single:
-            state = physics.state
-            color = (255, 255, 255) # Default White
-            if state == "READY":
-                color = (0, 255, 0) # Green
-            elif state == "WEIGHING":
-                color = (255, 255, 0) # Yellow
-            elif state == "PROPULSION":
-                color = (255, 165, 0) # Orange
-            elif state == "LANDING":
-                color = (255, 100, 100) # Light Red
-            elif state == "IN_AIR":
-                color = (0, 255, 255) # Cyan
-                
-            dpg.configure_item("met_s_state", default_value=state, color=color)
-            dpg.set_value("met_s_mass", f"{physics.jumper_mass_kg:.1f} kg")
-        if is_est:
-            dpg.set_value("met_e_state", physics.state)
-            dpg.set_value("met_e_mass", f"{physics.jumper_mass_kg:.1f} kg")
-        if is_contact:
-            dpg.set_value("met_c_state", physics.state)
+        # auto_fit_y = is_autofit_enabled() # Managed by PlotManager now internally if passed or accessed via callback
 
-        # 2. History List Update
-        current_items = dpg.get_item_configuration("list_history")["items"]
+        # 2. Controller Update (Metrics & State)
+        if current_controller:
+            # We pass 'dt' as approx frame time (0.016) or calculate real dt
+            dt = now - last_update 
+            current_controller.update(physics, dt, selected_jump)
+
+        # 3. History List Update
+        # Filter logic based on mode type (Simplification: Name check)
+        # "Single Jump" and variants vs "Contact Time" vs "Jump Estimation"
         
-        # Filter history by mode
-        if is_single:
-            filtered_history = [j for j in jump_history if j.get('formula_peak_power') is not None]
-        elif is_contact:
-            filtered_history = [j for j in jump_history if 'contact_time' in j]
-        elif is_est:
-            filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j]
-        else:
-            filtered_history = jump_history
+        current_items = dpg.get_item_configuration("list_history")["items"]
+        filtered_history = jump_history
+        
+        if current_mode_name in ["Single Jump", "Box Drop", "Box Drop Jump", "Push Up", "Squat", "Deadlift", "Power Clean"]:
+             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is not None]
+        elif current_mode_name == "Contact Time":
+             filtered_history = [j for j in jump_history if 'contact_time' in j]
+        elif current_mode_name == "Jump Estimation":
+             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j]
 
         target_items = [
             f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
@@ -125,171 +136,25 @@ def main():
         
         if len(current_items) != len(target_items) or (len(current_items) > 0 and current_items[0] != target_items[0]):
             dpg.configure_item("list_history", items=target_items)
-            
-        # 3. Update Metrics
-        if selected_jump:
-            if is_single:
-                 dpg.set_value("met_s_height", safe_fmt(selected_jump.get('height_flight'), 'cm'))
-                 dpg.set_value("met_s_height_imp", safe_fmt(selected_jump.get('height_impulse'), 'cm'))
-                 dpg.set_value("met_s_flight", safe_fmt(selected_jump.get('flight_time'), 'ms', ".0f"))
-                 dpg.set_value("met_s_peak_pwr", safe_fmt(selected_jump.get('peak_power'), 'W', ".0f"))
-                 dpg.set_value("met_s_peak_pwr_form", safe_fmt(selected_jump.get('formula_peak_power'), 'W', ".0f"))
-                 dpg.set_value("met_s_mean_pwr", safe_fmt(selected_jump.get('avg_power'), 'W', ".0f"))
-                 dpg.set_value("met_s_mean_pwr_form", safe_fmt(selected_jump.get('formula_avg_power'), 'W', ".0f"))
-                 dpg.set_value("met_s_peak_force", safe_fmt(selected_jump.get('max_force'), 'kg'))
-                 dpg.set_value("met_s_vel", safe_fmt(selected_jump.get('velocity_takeoff'), 'm/s', ".2f"))
-                 dpg.set_value("met_s_vel_flight", safe_fmt(selected_jump.get('velocity_flight'), 'm/s', ".2f"))
-                 # Show mass from selected jump
-                 mass = selected_jump.get('jumper_weight', 0)
-                 dpg.set_value("met_s_mass", f"{mass:.1f} kg" if mass else "--")
 
-            if is_est:
-                 dpg.set_value("met_e_height_imp", safe_fmt(selected_jump.get('height_impulse'), 'cm'))
-                 dpg.set_value("met_e_flight", safe_fmt(selected_jump.get('flight_time'), 'ms', ".0f"))
-                 dpg.set_value("met_e_peak_pwr", safe_fmt(selected_jump.get('peak_power'), 'W', ".0f"))
-                 dpg.set_value("met_e_mean_pwr", safe_fmt(selected_jump.get('avg_power'), 'W', ".0f"))
-                 dpg.set_value("met_e_peak_force", safe_fmt(selected_jump.get('max_force'), 'kg'))
-                 dpg.set_value("met_e_vel", safe_fmt(selected_jump.get('velocity_takeoff'), 'm/s', ".2f"))
-                 
-            if is_contact:
-                 dpg.set_value("met_c_contact_time", safe_fmt(selected_jump.get('contact_time'), 'ms', ".0f"))
-                 dpg.set_value("met_c_max_force", safe_fmt(selected_jump.get('max_force'), 'kg'))
-                 
-        else:
-            # Clear metrics
-            if is_single:
-                 dpg.set_value("met_s_height", "--")
-                 dpg.set_value("met_s_height_imp", "--")
-                 dpg.set_value("met_s_flight", "--")
-                 dpg.set_value("met_s_peak_pwr", "--")
-                 dpg.set_value("met_s_peak_pwr_form", "--")
-                 dpg.set_value("met_s_mean_pwr", "--")
-                 dpg.set_value("met_s_mean_pwr_form", "--")
-                 dpg.set_value("met_s_peak_force", "--")
-                 dpg.set_value("met_s_vel", "--")
-                 dpg.set_value("met_s_vel_flight", "--")
-                 
-            if is_est:
-                 dpg.set_value("met_e_height_imp", "--")
-                 dpg.set_value("met_e_flight", "--")
-                 dpg.set_value("met_e_peak_pwr", "--")
-                 dpg.set_value("met_e_mean_pwr", "--")
-                 dpg.set_value("met_e_peak_force", "--")
-                 dpg.set_value("met_e_vel", "--")
-            
-            if is_contact:
-                dpg.set_value("met_c_contact_time", "--")
-                dpg.set_value("met_c_max_force", "--")
-
-        # 4. Live Plot with Averaging
+        # 4. Plot Update
         if not selected_jump:
-            if now - last_update > 0.033:  # 30fps
-                data = physics.get_buffer_view_time_window(physics.logic_time, 5000) 
-                if len(data) > 0:
-                    # Apply averaging to reduce noise
-                    # At 1280Hz with 30fps updates: ~43 samples per frame
-                    # Target ~150 points on graph for smooth display
-                    downsample_factor = max(1, len(data) // 150)
-                    
-                    if downsample_factor > 1:
-                        # Trim data to be evenly divisible
-                        n_groups = len(data) // downsample_factor
-                        trimmed_len = n_groups * downsample_factor
-                        
-                        # Reshape and average
-                        xs_raw = data[:trimmed_len, 0].reshape(n_groups, downsample_factor).mean(axis=1)
-                        ys = data[:trimmed_len, 1].reshape(n_groups, downsample_factor).mean(axis=1)
-                        xs = (xs_raw - data[-1, 0]) / 1000.0 + 5
-                    else:
-                        xs = (data[:, 0] - data[-1, 0]) / 1000.0 + 5
-                        ys = data[:, 1]
-                    
-                    xs = np.ascontiguousarray(xs)
-                    ys = np.ascontiguousarray(ys)
-                    
-                    dpg.set_value("plot_line_series", [xs, ys])
-                    
-                    mass = physics.jumper_mass_kg if physics.jumper_mass_kg > 0 else 0
-                    if mass > 0 and len(xs) > 0:
-                        dpg.set_value("plot_line_series_mass", [[xs[0], xs[-1]], [mass, mass]])
-                    else:
-                        dpg.set_value("plot_line_series_mass", [[], []])
+            # LIVE VIEW
+            # Last selected ID reset so we refresh if we select again
+            last_selected_jump_id = None
+            
+            # 30 FPS update cap inside plot_manager
+            plot_manager.update_live_plot(physics, now)
+            
+        else:
+            # SELECTED VIEW
+            # Only update if the selection actually changed or we haven't drawn it yet
+            sel_id = selected_jump.get('_id')
+            if sel_id != last_selected_jump_id:
+                plot_manager.update_selected_from_jump(selected_jump)
+                last_selected_jump_id = sel_id
 
-                    if is_contact:
-                        dpg.set_value("plot_line_series_power", [[], []])
-                        dpg.set_value("plot_line_series_vel", [[], []])
-                    else:
-                        dpg.set_value("plot_line_series_power", [[], []])
-                        dpg.set_value("plot_line_series_vel", [[], []])
-                    
-                    dpg.set_value("plot_line_series_ct_start", [[], []])
-                    dpg.set_value("plot_line_series_ct_end", [[], []])
-
-                    # Update current plot data for hover
-                    update_current_plot_data(xs, ys, [], [])
-                    
-                    dpg.fit_axis_data("x_axis")
-                    if auto_fit_y:
-                        dpg.set_axis_limits("y_axis", -10, max(150, np.max(ys) + 20))
-                    else:
-                        dpg.set_axis_limits_auto("y_axis")
-                last_update = now
-        
-        # 5. Selected Jump Display
-        if selected_jump:
-            p_val = dpg.get_value("plot_line_series_power")
-            curr_p_x = p_val[0] if p_val and len(p_val) > 0 else []
-            if len(curr_p_x) == 0: 
-                curve = selected_jump.get('force_curve')
-                if curve:
-                    xs = [(p['t'] - curve[0]['t'])/1000.0 for p in curve]
-                    ys = [p['v'] for p in curve] 
-                    
-                    # Check if power and velocity are present
-                    has_power = all(p.get('p') is not None for p in curve)
-                    has_vel = all(p.get('vel') is not None for p in curve)
-
-                    ps = [p.get('p', 0) for p in curve] if has_power else []
-                    vs = [p.get('vel', 0) for p in curve] if has_vel else []
-                    
-                    xs = np.ascontiguousarray(xs)
-                    ys = np.ascontiguousarray(ys)
-                    ps = np.ascontiguousarray(ps)
-                    vs = np.ascontiguousarray(vs)
-                    
-                    dpg.set_value("plot_line_series", [xs, ys])
-                    
-                    mass = selected_jump.get('jumper_weight', 0)
-                    if mass > 0 and len(xs) > 0:
-                       dpg.set_value("plot_line_series_mass", [[xs[0], xs[-1]], [mass, mass]])
-                    else:
-                       dpg.set_value("plot_line_series_mass", [[], []])
-
-                    dpg.set_value("plot_line_series_power", [xs, ps] if has_power else [[], []])
-                    dpg.set_value("plot_line_series_vel", [xs, vs] if has_vel else [[], []])
-                    
-                    # --- Contact Time Markers ---
-                    t_start = selected_jump.get('contact_start_time')
-                    t_end = selected_jump.get('contact_end_time')
-                    t_curv = selected_jump.get('curve_start_time')
-                    if t_start and t_end and t_curv:
-                        x_s = (t_start - t_curv) / 1000.0
-                        x_e = (t_end - t_curv) / 1000.0
-                        max_y = np.max(ys) if len(ys) > 0 else 200
-                        dpg.set_value("plot_line_series_ct_start", [[x_s, x_s], [0, max_y]])
-                        dpg.set_value("plot_line_series_ct_end", [[x_e, x_e], [0, max_y]])
-                    else:
-                        dpg.set_value("plot_line_series_ct_start", [[], []])
-                        dpg.set_value("plot_line_series_ct_end", [[], []])
-                    
-                    # Update current plot data for hover
-                    update_current_plot_data(xs, ys, ps if has_power else [], vs if has_vel else [])
-
-                    dpg.fit_axis_data("x_axis")
-                    dpg.fit_axis_data("y_axis")
-                    dpg.fit_axis_data("y_axis_power")
-                    dpg.fit_axis_data("y_axis_vel")
-
+        last_update = now
         dpg.render_dearpygui_frame()
 
     dpg.destroy_context()

@@ -53,11 +53,13 @@ class PhysicsEngine:
             "Contact Time": ContactTimeMode(self)
         }
         self.active_mode = self.modes["Single Jump"]
+        self.active_mode_name = "Single Jump"
         self.on_calib_callback = None
 
     def set_mode(self, mode_name):
         if mode_name in self.modes:
             self.active_mode = self.modes[mode_name]
+            self.active_mode_name = mode_name
             self.reset_state()
             print(f"Switched to mode: {mode_name}")
         else:

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budowa Platformy Tensometrycznej</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Liberation Sans', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            font-size: 11pt;
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a365d;
+            font-size: 20pt;
+            margin-bottom: 5mm;
+            font-weight: 700;
+        }
+
+        .author {
+            text-align: center;
+            color: #666;
+            font-size: 10pt;
+            margin-bottom: 10mm;
+        }
+
+        h2 {
+            color: #2c5282;
+            font-size: 14pt;
+            margin-top: 8mm;
+            margin-bottom: 4mm;
+            border-bottom: 2px solid #2c5282;
+            padding-bottom: 2mm;
+        }
+
+        h3 {
+            color: #3182ce;
+            font-size: 12pt;
+            margin-top: 5mm;
+            margin-bottom: 3mm;
+        }
+
+        p {
+            text-align: justify;
+            margin-bottom: 4mm;
+        }
+
+        ul,
+        ol {
+            margin-left: 8mm;
+            margin-bottom: 4mm;
+        }
+
+        li {
+            margin-bottom: 2mm;
+        }
+
+        .figure {
+            text-align: center;
+            margin: 6mm 0;
+        }
+
+        .figure img {
+            max-width: 100%;
+            max-height: 90mm;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        .figure.large img {
+            max-height: 120mm;
+        }
+
+        .figure-caption {
+            font-style: italic;
+            color: #666;
+            font-size: 9pt;
+            margin-top: 2mm;
+        }
+
+        .two-column {
+            display: flex;
+            gap: 5mm;
+            justify-content: center;
+        }
+
+        .two-column .figure {
+            flex: 1;
+            max-width: 50%;
+        }
+
+        .two-column .figure img {
+            max-height: 70mm;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 4mm 0;
+            font-size: 10pt;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 2mm 3mm;
+            text-align: left;
+        }
+
+        th {
+            background-color: #e2e8f0;
+            font-weight: 600;
+        }
+
+        .formula {
+            background-color: #f7fafc;
+            padding: 3mm 5mm;
+            margin: 4mm 0;
+            border-left: 4px solid #3182ce;
+            font-family: 'Cambria Math', 'Times New Roman', serif;
+        }
+
+        .formula-block {
+            text-align: center;
+            font-size: 12pt;
+            margin: 2mm 0;
+        }
+
+        code {
+            background-color: #f0f0f0;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 9pt;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+
+        @media print {
+
+            body {
+                padding: 15mm;
+            }
+
+            .figure img {
+                max-height: 80mm;
+            }
+
+            .two-column .figure img {
+                max-height: 60mm;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Budowa Platformy Tensometrycznej</h1>
+    <p class="author">Sprawozdanie z zajęć: Aplikacje Systemów Wbudowanych</p>
+
+    <h2>1. Wstęp</h2>
+    <p>
+        Platforma tensometryczna (force plate) jest urządzeniem pomiarowym wykorzystywanym w biomechanice, fizjoterapii
+        oraz treningu sportowym do pomiaru sił reakcji podłoża. Niniejsze sprawozdanie przedstawia proces budowy
+        prototypowej platformy tensometrycznej opartej na mikrokontrolerze ESP32 i czujnikach tensometrycznych (load
+        cells).
+    </p>
+    <p>
+        Głównym celem projektu było stworzenie ekonomicznego urządzenia umożliwiającego pomiar wysokości skoku,
+        czasu lotu, mocy oraz prędkości startu. Platforma komunikuje się z aplikacją desktopową poprzez port szeregowy,
+        z planowaną przyszłą integracją Bluetooth.
+    </p>
+
+    <div class="figure">
+        <img src="complete.jpg" alt="Gotowa platforma tensometryczna">
+        <div class="figure-caption">Rys. 1. Gotowa, zamknięta platforma tensometryczna (prototyp na płycie OSB 1m × 1m)
+        </div>
+    </div>
+
+    <h2>2. Komponenty Sprzętowe</h2>
+
+    <h3>2.1. Czujniki Tensometryczne (Load Cells)</h3>
+    <p>
+        Tensometr (strain gauge) to czujnik elektryczny służący do pomiaru odkształceń mechanicznych.
+        Zasada działania opiera się na zmianie rezystancji przewodnika przy jego rozciąganiu lub ściskaniu.
+        Zależność tę opisuje wzór:
+    </p>
+    <div class="formula">
+        <div class="formula-block">ΔR/R = GF · ε</div>
+        gdzie: ΔR – zmiana rezystancji, R – rezystancja nominalna, GF – współczynnik czułości (gauge factor, typowo ~2),
+        ε – odkształcenie względne
+    </div>
+    <p>
+        W projekcie wykorzystano 8 czujników tensometrycznych typu belkowego (identycznych jak w wagach łazienkowych),
+        każdy o maksymalnym obciążeniu 50 kg. Łączna nośność platformy wynosi więc teoretycznie 400 kg.
+        Czujniki rozmieszczone są w układzie ośmiokąta foremnego, co zapewnia równomierny rozkład obciążenia.
+    </p>
+
+    <div class="two-column">
+        <div class="figure">
+            <img src="loadcell2.png" alt="Czujnik tensometryczny">
+            <div class="figure-caption">Rys. 2. Czujnik tensometryczny typu belkowego z plastikową obudową montażową
+            </div>
+        </div>
+        <div class="figure">
+            <img src="top.jpg" alt="Rozmieszczenie czujników">
+            <div class="figure-caption">Rys. 3. Rozmieszczenie 8 czujników w układzie ośmiokąta</div>
+        </div>
+    </div>
+
+    <h3>2.2. Mostek Wheatstone'a i połączenia elektryczne</h3>
+    <p>
+        Czujniki tensometryczne łączone są w konfigurację mostka Wheatstone'a, co pozwala na precyzyjny pomiar
+        niewielkich zmian rezystancji. Każdy czujnik posiada 3 przewody: czerwony (sygnał), czarny i żółty.
+    </p>
+
+    <p><strong>Parowanie czujników:</strong></p>
+    <p>
+        8 czujników podzielono na 4 pary, łącząc w każdej parze wszystkie 3 przewody (czerwony z czerwonym,
+        czarny z czarnym, żółty z żółtym):
+    </p>
+    <ul>
+        <li><strong>Para górna-lewa (TL):</strong> Czujniki 1 i 2</li>
+        <li><strong>Para górna-prawa (TR):</strong> Czujniki 3 i 4</li>
+        <li><strong>Para dolna-lewa (BL):</strong> Czujniki 5 i 6</li>
+        <li><strong>Para dolna-prawa (BR):</strong> Czujniki 7 i 8</li>
+    </ul>
+
+    <p><strong>Tworzenie pętli mostka (przewody czarne i żółte):</strong></p>
+    <ul>
+        <li>Połącz <strong>czarny TL z czarnym TR</strong> (góra platformy, poziomo)</li>
+        <li>Połącz <strong>czarny BL z czarnym BR</strong> (dół platformy, poziomo)</li>
+        <li>Połącz <strong>żółty TL z żółtym BL</strong> (lewa strona, pionowo)</li>
+        <li>Połącz <strong>żółty TR z żółtym BR</strong> (prawa strona, pionowo)</li>
+    </ul>
+
+    <p><strong>Podłączenie do przetwornika CS1238 (przewody czerwone):</strong></p>
+    <ul>
+        <li><strong>Czerwony TL → E+</strong> (Excitation Positive)</li>
+        <li><strong>Czerwony BR → E−</strong> (Excitation Negative)</li>
+        <li><strong>Czerwony TR → A+</strong> (Signal Positive)</li>
+        <li><strong>Czerwony BL → A−</strong> (Signal Negative)</li>
+    </ul>
+
+    <p><strong>Podłączenie CS1238 do ESP32:</strong></p>
+    <ul>
+        <li>DOUT → GPIO 19</li>
+        <li>SCK → GPIO 18</li>
+        <li>VDD → 3.3V</li>
+        <li>GND → GND</li>
+    </ul>
+
+    <div class="figure">
+        <img src="schematic.png" alt="Schemat elektryczny">
+        <div class="figure-caption">Rys. 4. Schemat elektryczny połączeń mostka Wheatstone'a z przetwornikiem CS1238 i
+            ESP32</div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h3>2.3. Przetwornik ADC CS1238</h3>
+    <p>
+        CS1238 to precyzyjny 24-bitowy przetwornik analogowo-cyfrowy (ADC) zaprojektowany specjalnie
+        do aplikacji wagowych. Kluczowe parametry:
+    </p>
+    <table>
+        <tr>
+            <th>Parametr</th>
+            <th>Wartość</th>
+        </tr>
+        <tr>
+            <td>Rozdzielczość</td>
+            <td>24 bity</td>
+        </tr>
+        <tr>
+            <td>Częstotliwość próbkowania</td>
+            <td>10 / 40 / 640 / 1280 Hz (programowalna)</td>
+        </tr>
+        <tr>
+            <td>Wzmocnienie (PGA)</td>
+            <td>1 / 2 / 64 / 128 (programowalne)</td>
+        </tr>
+        <tr>
+            <td>Napięcie zasilania</td>
+            <td>2.6V – 5.5V</td>
+        </tr>
+        <tr>
+            <td>Interfejs</td>
+            <td>Dwuprzewodowy (CLK + DATA)</td>
+        </tr>
+    </table>
+    <p>
+        W projekcie CS1238 skonfigurowano na częstotliwość 1280 Hz z wzmocnieniem PGA 128,
+        co zapewnia wysoką rozdzielczość czasową niezbędną do precyzyjnego pomiaru dynamiki skoku.
+    </p>
+
+    <div class="two-column">
+        <div class="figure">
+            <img src="cs1238.png" alt="Moduł CS1238">
+            <div class="figure-caption">Rys. 5. Moduł przetwornika CS1238</div>
+        </div>
+        <div class="figure">
+            <img src="esp32.png" alt="Płytka ESP32">
+            <div class="figure-caption">Rys. 6. Mikrokontroler ESP32 LOLIN32 Lite</div>
+        </div>
+    </div>
+
+    <h3>2.4. Mikrokontroler ESP32</h3>
+    <p>
+        ESP32 to wydajny mikrokontroler dwurdzeniowy z wbudowanym WiFi i Bluetooth.
+        W projekcie odpowiada za:
+    </p>
+    <ul>
+        <li>Odczyt danych z przetwornika CS1238 (GPIO18 – SCK, GPIO19 – DOUT)</li>
+        <li>Automatyczne tarowanie przy starcie (pomiar offsetu przez 2 sekundy)</li>
+        <li>Pomiar i raportowanie rzeczywistej częstotliwości próbkowania</li>
+        <li>Transmisję surowych danych przez port szeregowy (921600 baud)</li>
+    </ul>
+    <p>
+        Wszystkie obliczenia fizyczne (prędkość, moc, wysokość skoku) wykonywane są po stronie
+        aplikacji desktopowej, co umożliwia elastyczne modyfikacje algorytmów bez konieczności
+        przeprogramowania mikrokontrolera. ESP32 posiada wbudowany moduł Bluetooth, który zostanie
+        wykorzystany w przyszłych wersjach do bezprzewodowej transmisji danych.
+    </p>
+
+    <div class="figure">
+        <img src="closeup.jpg" alt="Zbliżenie elektroniki">
+        <div class="figure-caption">Rys. 7. Zbliżenie na podłączenie modułów: ESP32, CS1238, bateria LiPo 1000mAh</div>
+    </div>
+
+    <h2>3. Algorytm Pomiaru Skoku</h2>
+
+    <h3>3.1. Maszyna Stanów</h3>
+    <p>
+        Oprogramowanie implementuje maszynę stanów obsługującą cały cykl skoku:
+    </p>
+    <ol>
+        <li><strong>IDLE / WEIGHING:</strong> Oczekiwanie na stabilne obciążenie i automatyczny pomiar masy ciała</li>
+        <li><strong>READY:</strong> Masa zmierzona, platforma gotowa do skoku</li>
+        <li><strong>PROPULSION:</strong> Wykryto ruch – całkowanie sił w celu obliczenia prędkości</li>
+        <li><strong>IN_AIR:</strong> Siła poniżej progu – faza lotu</li>
+        <li><strong>LANDING:</strong> Lądowanie – zbieranie danych do wykresu mocy</li>
+    </ol>
+
+    <div class="page-break"></div>
+
+    <h3>3.2. Obliczenia Fizyczne</h3>
+
+    <p><strong>Wysokość skoku z czasu lotu:</strong></p>
+    <div class="formula">
+        <div class="formula-block">h = (g · t²) / 8</div>
+        gdzie: h – wysokość [m], g – przyspieszenie ziemskie (9.81 m/s²), t – czas lotu [s]
+    </div>
+
+    <p><strong>Prędkość startu z impulsu siły:</strong></p>
+    <p>
+        Podczas fazy propulsji (odpychania) system całkuje przyspieszenie wynikające z siły netto:
+    </p>
+    <div class="formula">
+        <div class="formula-block">a = (F<sub>netto</sub>) / m = ((F<sub>mierzona</sub> - m·g)) / m</div>
+        <div class="formula-block">v(t) = ∫ a · dt</div>
+    </div>
+    <p>
+        Prędkość w momencie oderwania (takeoff velocity) pozwala obliczyć wysokość metodą impulsową:
+    </p>
+    <div class="formula">
+        <div class="formula-block">h<sub>impulse</sub> = v² / (2g)</div>
+    </div>
+
+    <p><strong>Moc chwilowa i uśredniona:</strong></p>
+    <div class="formula">
+        <div class="formula-block">P(t) = F(t) · v(t)</div>
+        <div class="formula-block">P<sub>avg</sub> = (1/n) · Σ P(t)</div>
+    </div>
+    <p>
+        System rejestruje również moc szczytową (peak power) oraz stosuje wzory empiryczne Haramana i Sayersa
+        do walidacji wyników.
+    </p>
+
+    <h2>4. Aplikacja Desktopowa</h2>
+    <p>
+        Aplikacja napisana w Python (PyQt5) umożliwia wizualizację danych w czasie rzeczywistym
+        oraz analizę zarejestrowanych skoków. Główne funkcje:
+    </p>
+    <ul>
+        <li>Wykres siły, prędkości i mocy w funkcji czasu</li>
+        <li>Automatyczny pomiar masy ciała</li>
+        <li>Tarowanie i kalibracja platformy</li>
+        <li>Historia skoków z zapisem do bazy danych SQLite</li>
+        <li>Różne tryby pracy: Single Jump, Jump Estimation, Contact Time</li>
+    </ul>
+
+    <div class="figure large">
+        <img src="example.png" alt="Screenshot aplikacji">
+        <div class="figure-caption">Rys. 8. Zrzut ekranu aplikacji – analiza pojedynczego skoku z wykresem siły,
+            prędkości i mocy</div>
+    </div>
+
+    <h2>5. Komunikacja</h2>
+    <p>
+        Obecnie platforma komunikuje się z komputerem poprzez port szeregowy USB (baud rate 921600).
+        Mikrokontroler przesyła surowe dane pomiarowe w formacie JSON:
+    </p>
+    <div class="formula" style="font-family: monospace; font-size: 9pt;">
+        <code>{"w":156234,"t":1234567890}</code> – surowa wartość obciążenia z timestampem (mikrosekundy)
+    </div>
+    <p>
+        Aplikacja desktopowa odbiera te dane i wykonuje wszystkie obliczenia fizyczne (prędkość, moc, wysokość)
+        lokalnie, co pozwala na elastyczność algorytmów i łatwe wprowadzanie poprawek bez konieczności
+        aktualizacji firmware'u mikrokontrolera.
+    </p>
+    <p>
+        W przyszłości planowana jest komunikacja bezprzewodowa poprzez Bluetooth Low Energy (BLE)
+        wbudowany w ESP32, co umożliwi pełną mobilność urządzenia zasilanego baterią LiPo.
+    </p>
+
+    <h2>6. Podsumowanie</h2>
+    <p>
+        Zbudowany prototyp platformy tensometrycznej stanowi funkcjonalne urządzenie do analizy skoków.
+        Kluczowe osiągnięcia projektu:
+    </p>
+    <ul>
+        <li>Częstotliwość próbkowania 1280 Hz zapewniająca wysoką rozdzielczość czasową</li>
+        <li>Automatyczny pomiar masy ciała z detekcją stabilności</li>
+        <li>Całkowanie impulsowe do obliczenia prędkości i wysokości skoku</li>
+        <li>Wizualizacja danych w czasie rzeczywistym</li>
+    </ul>
+    <p>
+        Dalsze plany rozwoju obejmują: konstrukcję metalową zamiast OSB, zastosowanie przemysłowych
+        czujników tensometrycznych o wyższej precyzji oraz pełną integrację komunikacji Bluetooth.
+    </p>
+
+</body>
+
+</html>

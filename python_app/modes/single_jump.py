@@ -69,6 +69,62 @@ class SingleJumpMode(PhysicsMode):
         self.pending_result_data = None
         self.result_emit_time = 0.0
 
+    def _reset_integration_accumulators(self):
+        self.current_velocity = 0.0
+        self.peak_power = 0.0
+        self.sum_power = 0.0
+        self.power_sample_count = 0
+        self.block_sum = 0
+        self.block_count = 0
+        self.block_averages = []
+        self.propulsion_stability_start_time = 0.0
+
+
+    def _try_emit_result(self, now, force=False):
+        """
+        Emits the pending result if the time has come, or if forced.
+        """
+        if self.pending_result_data is None:
+            return None
+            
+        if not force and now < self.result_emit_time:
+            return None
+            
+        engine = self.engine
+        d = self.pending_result_data
+        
+        # Determine graph window. 
+        # If we are forcing (e.g. early exit), we want to capture up to NOW.
+        # But generally we want a bit of context.
+        t_start = d["graph_start_time_y"] - 600
+        
+        curve = engine.generate_power_curve(
+            t_start, 
+            d["avg_power_start_time"], 
+            d["jumper_weight"],
+            start_velocity=d["graph_start_velocity"]
+        )
+        
+        result = {
+            "timestamp": d["timestamp"],
+            "flight_time": d["flight_time"],
+            "height_flight": d["height_flight"],
+            "height_impulse": d["height_impulse"],
+            "peak_power": d["peak_power"],
+            "avg_power": d["avg_power"],
+            "formula_peak_power": d["formula_peak_power"],
+            "formula_avg_power": d["formula_avg_power"],
+            "velocity_takeoff": d["velocity_takeoff"],
+            "velocity_flight": d["velocity_flight"],
+            "max_force": d["max_force"],
+            "jumper_weight": d["jumper_weight"],
+            "force_curve": curve,
+            "avg_power_start_time": d["avg_power_start_time"]
+        }
+        
+        self.pending_result_data = None
+        return result
+
     def process_sample(self, raw, timestamp, micros, now, dt):
         engine = self.engine
         
@@ -131,7 +187,7 @@ class SingleJumpMode(PhysicsMode):
                     
                     self.current_velocity = v_impact
                     
-                    # Reset Accumulators for the NEXT phase
+                    # Reset accumulators
                     self.peak_power = 0
                     self.sum_power = 0
                     self.power_sample_count = 0
@@ -158,35 +214,7 @@ class SingleJumpMode(PhysicsMode):
                 
         elif weight < AIR_THRESHOLD:
             # Handle delayed result emission if we takeoff before 300ms (Rebound)
-            if self.pending_result_data is not None:
-                # Force emit result now because we are leaving the ground
-                d = self.pending_result_data
-                t_start = d["graph_start_time_y"] - 600
-                curve = engine.generate_power_curve(
-                    t_start, 
-                    d["avg_power_start_time"], 
-                    d["jumper_weight"],
-                    start_velocity=d["graph_start_velocity"]
-                )
-                
-                result = {
-                    "timestamp": d["timestamp"],
-                    "flight_time": d["flight_time"],
-                    "height_flight": d["height_flight"],
-                    "height_impulse": d["height_impulse"],
-                    "peak_power": d["peak_power"],
-                    "avg_power": d["avg_power"],
-                    "formula_peak_power": d["formula_peak_power"],
-                    "formula_avg_power": d["formula_avg_power"],
-                    "velocity_takeoff": d["velocity_takeoff"],
-                    "velocity_flight": d["velocity_flight"],
-                    "max_force": d["max_force"],
-                    "jumper_weight": d["jumper_weight"],
-                    "force_curve": curve,
-                    "avg_power_start_time": d["avg_power_start_time"]
-                }
-                self.pending_result_data = None
-
+            result = self._try_emit_result(now, force=True)
 
             if self.state in ["READY", "PROPULSION", "LANDING"]:
                 # TAKEOFF
@@ -240,35 +268,10 @@ class SingleJumpMode(PhysicsMode):
                 # READY or PROPULSION or LANDING
                 
                 # Check for pending result emission
-                if self.state == "LANDING" and self.pending_result_data is not None:
-                   if now >= self.result_emit_time:
-                       d = self.pending_result_data
-                       t_start = d["graph_start_time_y"] - 500
-                       # Graph includes landing phase now
-                       curve = engine.generate_power_curve(
-                           t_start, 
-                           d["avg_power_start_time"], 
-                           d["jumper_weight"],
-                           start_velocity=d["graph_start_velocity"]
-                        )
-                       
-                       result = {
-                           "timestamp": d["timestamp"],
-                           "flight_time": d["flight_time"],
-                           "height_flight": d["height_flight"],
-                           "height_impulse": d["height_impulse"],
-                           "peak_power": d["peak_power"],
-                           "avg_power": d["avg_power"],
-                           "formula_peak_power": d["formula_peak_power"],
-                           "formula_avg_power": d["formula_avg_power"],
-                           "velocity_takeoff": d["velocity_takeoff"],
-                           "velocity_flight": d["velocity_flight"],
-                           "max_force": d["max_force"],
-                           "jumper_weight": d["jumper_weight"],
-                           "force_curve": curve,
-                           "avg_power_start_time": d["avg_power_start_time"]
-                       }
-                       self.pending_result_data = None
+                if self.state == "LANDING":
+                    res = self._try_emit_result(now)
+                    if res:
+                        result = res
                 
                 if self.state not in ["PROPULSION", "LANDING"]:
                     diff = abs(weight - self.static_weight_raw)
@@ -305,66 +308,50 @@ class SingleJumpMode(PhysicsMode):
                             self.peak_power = instant_power
                             
 
-                        # Exit Condition (PROPULSION)
-                        diff_mass = abs(display_kg - self.jumper_mass_kg)
-                        if self.state == "PROPULSION":
-                            if diff_mass < 2*STABILITY_TOLERANCE_KG:
-                                if self.propulsion_stability_start_time == 0:
-                                    self.propulsion_stability_start_time = now
-                                elif now - self.propulsion_stability_start_time > 250:
-                                    self.state = "READY"
-                                    self.current_velocity = 0
-                                    self.peak_power = 0
-                                    self.sum_power = 0
-                                    self.power_sample_count = 0
-                                    self.propulsion_stability_start_time = 0
-                            else:
-                                self.propulsion_stability_start_time = 0
+                        # --- UNIFIED EXIT LOGIC ---
+                        # Use block averaging for both PROPULSION and LANDING to ensure robust stability detection.
+                        # This avoids "false resets" when passing through bodyweight during the jump.
+                        
+                        self.block_sum += display_kg
+                        self.block_count += 1
+                        
+                        if self.block_count >= 20:
+                            avg = self.block_sum / 20.0
+                            self.block_averages.append(avg)
+                            self.block_sum = 0
+                            self.block_count = 0
                             
-                        # LANDING Exit Stability Check
-                        if self.state == "LANDING":
-                            self.block_sum += display_kg
-                            self.block_count += 1
-                            
-                            if self.block_count >= 20:
-                                avg = self.block_sum / 20.0
-                                self.block_averages.append(avg)
-                                self.block_sum = 0
-                                self.block_count = 0
+                            # Keep only last 10 blocks (approx 300ms window)
+                            if len(self.block_averages) >= 10:
+                                self.block_averages = self.block_averages[-10:]
                                 
-                                # We need 10 blocks (300 samples)
-                                if len(self.block_averages) >= 10:
-                                    # Keep only last 10
-                                    self.block_averages = self.block_averages[-10:]
+                                b_min = min(self.block_averages)
+                                b_max = max(self.block_averages)
+                                noise_kg = b_max - b_min
+                                
+                                avg_val = sum(self.block_averages) / len(self.block_averages)
+                                diff_bw = abs(avg_val - self.jumper_mass_kg)
+                                
+                                # Check stability and bodyweight return
+                                # Using looser tolerance for bodyweight return (4x) to allow settling
+                                if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
+                                    # Update bodyweight to the new stable value
+                                    self.jumper_mass_kg = avg_val
+                                    self.static_weight_raw = avg_val * raw_per_kg
                                     
-                                    b_min = min(self.block_averages)
-                                    b_max = max(self.block_averages)
-                                    noise_kg = b_max - b_min
-                                    
-                                    # Check stability and bodyweight
-                                    # Using slightly looser tolerance for bodyweight check
-                                    # STABILITY_TOLERANCE_KG is 0.5kg
-                                    
-                                    avg_val = sum(self.block_averages) / len(self.block_averages)
-                                    diff_bw = abs(avg_val - self.jumper_mass_kg)
-                                    
-                                    if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
-                                        
-                                        print("state reseted")
-                                        self.state = "READY"
-                                        self.current_velocity = 0
-                                        self.peak_power = 0
-                                        self.sum_power = 0
-                                        self.power_sample_count = 0
-                                        self.phase_start_velocity = 0.0
-                                        self.pending_result_data = None # Stop any pending emission if we settled
+                                    # Force emit result if we have stabilized early
+                                    res = self._try_emit_result(now, force=True)
+                                    if res:
+                                        result = res
+
+                                    self.state = "READY"
+                                    self._reset_integration_accumulators()
+                                    self.phase_start_velocity = 0.0
+                                    self.pending_result_data = None # Should be cleared by try_emit, but safety.
 
                     if now - self.integration_start_time > MAX_PROPULSION_TIME_MS:
                          self.state = "READY"
-                         self.current_velocity = 0
-                         self.peak_power = 0
-                         self.sum_power = 0
-                         self.power_sample_count = 0
+                         self._reset_integration_accumulators()
 
         return {
             "state": self.state,

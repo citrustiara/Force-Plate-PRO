@@ -4,7 +4,6 @@ Clean, minimal entry point that initializes the application.
 """
 import dearpygui.dearpygui as dpg
 import time
-import numpy as np
 
 from physics import PhysicsEngine, GRAVITY
 from serial_handler import SerialHandler

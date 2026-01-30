@@ -49,6 +49,7 @@ class SingleJumpMode(PhysicsMode):
         self.phase_start_velocity = 0.0
         self.pending_result_data = None
         self.result_emit_time = 0.0
+        self.landing_protection_end_time = 0.0  # Bounce protection
 
     def reset_state(self):
         self.state = "IDLE"
@@ -68,6 +69,7 @@ class SingleJumpMode(PhysicsMode):
         self.phase_start_velocity = 0.0
         self.pending_result_data = None
         self.result_emit_time = 0.0
+        self.landing_protection_end_time = 0.0
 
     def _reset_integration_accumulators(self):
         self.current_velocity = 0.0
@@ -76,6 +78,8 @@ class SingleJumpMode(PhysicsMode):
         self.power_sample_count = 0
         self.block_sum = 0
         self.block_count = 0
+        self.block_averages = []
+        self.propulsion_stability_start_time = 0.0
         self.block_averages = []
         self.propulsion_stability_start_time = 0.0
 
@@ -137,7 +141,9 @@ class SingleJumpMode(PhysicsMode):
         display_kg = weight / raw_per_kg
         result = None
         
-        # --- STATE MACHINE ---
+        # --- STATE MACHINE AND PHYSICS INTEGRATION ---
+        
+        # 1. Handle IN_AIR State (Flight Phase)
         if self.state == "IN_AIR":
             current_air_time = now - self.takeoff_time
             
@@ -145,7 +151,7 @@ class SingleJumpMode(PhysicsMode):
                 if current_air_time >= MIN_AIR_TIME:
                     self.landing_time = now
                     
-                    # --- 1. CALCULATE CORE STATS (Snapshot) ---
+                    # --- CALCULATE CORE STATS (Snapshot) ---
                     t_sec = current_air_time / 1000.0
                     h = (gravity * t_sec * t_sec) / 8.0 * 100.0
                     v_flight = gravity * (t_sec / 2.0)
@@ -159,8 +165,6 @@ class SingleJumpMode(PhysicsMode):
                     h_impulse = (self.last_takeoff_velocity**2) / (2 * gravity) * 100.0
                     
                     # Prepare data for delayed emission
-                    # Note: We store the 'start_velocity' of the jump that just finished
-                    # so we can render its graph correctly later.
                     self.pending_result_data = {
                         "timestamp": self.landing_time,
                         "flight_time": current_air_time,
@@ -175,183 +179,178 @@ class SingleJumpMode(PhysicsMode):
                         "max_force": self.max_propulsion_force / gravity,
                         "jumper_weight": self.jumper_mass_kg,
                         "avg_power_start_time": self.integration_start_time,
-                        # IMPORTANT: Store the start velocity used for THIS jump phase
                         "graph_start_velocity": self.phase_start_velocity,
                         "graph_start_time_y": self.jump_start_y
                     }
                     self.result_emit_time = now + 600 # Wait 600ms to capture landing
                     
-                    # --- 2. PREPARE FOR REBOUND (Continuity) ---
-                    # Impact logic
+                    # --- PREPARE FOR REBOUND ---
                     v_impact = -1.0 * v_flight
-                    
                     self.current_velocity = v_impact
                     
-                    # Reset accumulators
                     self.peak_power = 0
                     self.sum_power = 0
                     self.power_sample_count = 0
                     self.max_propulsion_force = 0
                     
-                    # Transition
                     self.state = "LANDING"
                     self.integration_start_time = now
-                    self.jump_start_y = now # Mark start of new cycle
+                    self.jump_start_y = now 
                     
-                    # Reset stability counters for LANDING exit
                     self.block_sum = 0
                     self.block_count = 0
                     self.block_averages = []
                     
-                    # The NEXT jump starts with this velocity
                     self.phase_start_velocity = v_impact
                     
                 else:
-                    self.state = "READY"
+                    # Short air time - if we have pending result (came from LANDING), return to LANDING
+                    if self.pending_result_data is not None:
+                        self.state = "LANDING"
+                    else:
+                        self.state = "READY"
+                        
             elif current_air_time > MAX_AIR_TIME:
                 self.state = "IDLE"
                 self.weight_confirmed = False
-                
-        elif weight < AIR_THRESHOLD:
-            # Handle delayed result emission if we takeoff before 300ms (Rebound)
-            result = self._try_emit_result(now, force=True)
+            return {
+                "state": self.state, "kg": display_kg, "display_kg": display_kg,
+                "result": result, "jumper_mass_kg": self.jumper_mass_kg, "velocity": self.current_velocity
+            }
 
-            if self.state in ["READY", "PROPULSION", "LANDING"]:
-                # TAKEOFF
+        # 2. Check for Takeoff (Priority Mechanism)
+        # Transition to IN_AIR if weight is low AND we have positive velocity.
+        if weight < AIR_THRESHOLD and self.current_velocity > 0:
+             if self.state in ["READY", "PROPULSION", "LANDING"]:
+                result = self._try_emit_result(now, force=True)
                 self.last_takeoff_velocity = self.current_velocity
                 self.takeoff_time = now
                 self.state = "IN_AIR"
-            else:
-                if self.weight_confirmed:
-                    self.weight_confirmed = False
-                    self.jumper_mass_kg = 0
-                self.state = "IDLE"
-                self.calibration_start_time = 0
-        
+                return {
+                    "state": self.state, "kg": display_kg, "display_kg": display_kg,
+                    "result": result, "jumper_mass_kg": self.jumper_mass_kg, "velocity": self.current_velocity
+                }
+
+        # 3. Handle IDLE Reset when weight is low and we are NOT integrating
+        if weight < AIR_THRESHOLD and self.state not in ["PROPULSION", "LANDING", "IN_AIR"]:
+            if self.weight_confirmed:
+                self.weight_confirmed = False
+                self.jumper_mass_kg = 0
+            self.state = "IDLE"
+            self.calibration_start_time = 0
+            return {
+                "state": self.state, "kg": display_kg, "display_kg": display_kg,
+                "result": result, "jumper_mass_kg": self.jumper_mass_kg, "velocity": self.current_velocity
+            }
+
+
+        # 4. Active Integration (PROPULSION or LANDING)
+        # This block runs regardless of weight (handling unweighting dips) as long as we haven't taken off
+        if self.state in ["PROPULSION", "LANDING"]:
+             # Check for pending result emission if in LANDING
+             if self.state == "LANDING":
+                 res = self._try_emit_result(now)
+                 if res: result = res
+
+             if self.jumper_mass_kg > 0 and now - self.integration_start_time <= MAX_PROPULSION_TIME_MS:
+                 force_n = (raw / raw_per_kg) * gravity
+                 net_kg = display_kg - self.jumper_mass_kg
+                 net_force_n = net_kg * gravity
+                 acc = net_force_n / self.jumper_mass_kg
+                 
+                 self.current_velocity += acc * dt
+                 instant_power = force_n * self.current_velocity
+                 
+                 if force_n > self.max_propulsion_force:
+                     self.max_propulsion_force = force_n
+                 
+                 if self.current_velocity > 0:
+                     self.sum_power += instant_power
+                     self.power_sample_count += 1
+                 
+                 if instant_power > self.peak_power:
+                     self.peak_power = instant_power
+
+                 # --- STABILITY EXIT LOGIC ---
+                 self.block_sum += display_kg
+                 self.block_count += 1
+                 
+                 if self.block_count >= 20:
+                     avg = self.block_sum / 20.0
+                     self.block_averages.append(avg)
+                     self.block_sum = 0
+                     self.block_count = 0
+                     
+                     if len(self.block_averages) >= 10:
+                         self.block_averages = self.block_averages[-10:]
+                         b_min = min(self.block_averages)
+                         b_max = max(self.block_averages)
+                         noise_kg = b_max - b_min
+                         avg_val = sum(self.block_averages) / len(self.block_averages)
+                         diff_bw = abs(avg_val - self.jumper_mass_kg)
+                         
+                         if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
+                             self.jumper_mass_kg = avg_val
+                             self.static_weight_raw = avg_val * raw_per_kg
+                             res = self._try_emit_result(now, force=True)
+                             if res: result = res
+
+                             self.state = "READY"
+                             self._reset_integration_accumulators()
+                             self.phase_start_velocity = 0.0
+                             self.pending_result_data = None 
+
+             if now - self.integration_start_time > MAX_PROPULSION_TIME_MS:
+                  self.state = "READY"
+                  self._reset_integration_accumulators()
+                  
+        # 5. Calibration / Trigger Logic (When NOT integrating)
+        # This implies we are in READY/WEIGHING and weight >= AIR_THRESHOLD 
+        # (since lower weight handled by IDLE Reset)
         else:
-            # Weight > Air Threshold
-            if not self.weight_confirmed:
-                self.state = "WEIGHING"
-                if self.calibration_start_time == 0:
-                    self.calibration_start_time = now
-                    self.calibration_sum = 0
-                    self.calibration_count = 0
-                    self.block_sum = 0
-                    self.block_count = 0
-                    self.block_averages = []
-                
-                self.calibration_sum += weight
-                self.calibration_count += 1
-                
-                # Block accumulation
-                self.block_sum += weight
-                self.block_count += 1
-                if self.block_count >= 30:
-                    self.block_averages.append(self.block_sum / 30.0)
-                    self.block_sum = 0
-                    self.block_count = 0
-                
-                if now - self.calibration_start_time >= 300:
-                    if len(self.block_averages) > 0:
-                        b_min = min(self.block_averages)
-                        b_max = max(self.block_averages)
-                        noise_kg = (b_max - b_min) / raw_per_kg
-                        
-                        if noise_kg <= STABILITY_TOLERANCE_KG:
-                            self.static_weight_raw = self.calibration_sum / self.calibration_count
-                            self.jumper_mass_kg = self.static_weight_raw / raw_per_kg
-                            self.weight_confirmed = True
-                            self.state = "READY"
-                    
-                    self.calibration_start_time = 0
-            else:
-                # READY or PROPULSION or LANDING
-                
-                # Check for pending result emission
-                if self.state == "LANDING":
-                    res = self._try_emit_result(now)
-                    if res:
-                        result = res
-                
-                if self.state not in ["PROPULSION", "LANDING"]:
-                    diff = abs(weight - self.static_weight_raw)
-                    if diff > MOVEMENT_THRESHOLD:
-                        self.state = "PROPULSION"
-                        self.integration_start_time = now
-                        self.jump_start_y = now
-                        
-                        # Retroactive Fix
-                        self._retroactive_propulsion_fix(now)
-                    else:
-                        self.state = "READY"
-                        self.phase_start_velocity = 0.0 # Reset velocity if we settle
-                        
-                else:
-                    # IN PROPULSION or LANDING
-                    if self.jumper_mass_kg > 0 and now - self.integration_start_time <= MAX_PROPULSION_TIME_MS:
-                        force_n = (raw / raw_per_kg) * gravity
-                        net_kg = display_kg - self.jumper_mass_kg
-                        net_force_n = net_kg * gravity
-                        acc = net_force_n / self.jumper_mass_kg
-                        
-                        self.current_velocity += acc * dt
-                        instant_power = force_n * self.current_velocity
-                        
-                        if force_n > self.max_propulsion_force:
-                            self.max_propulsion_force = force_n
-                        
-                        if self.current_velocity > 0:
-                            self.sum_power += instant_power
-                            self.power_sample_count += 1
-                        
-                        if instant_power > self.peak_power:
-                            self.peak_power = instant_power
-                            
-
-                        # --- UNIFIED EXIT LOGIC ---
-                        # Use block averaging for both PROPULSION and LANDING to ensure robust stability detection.
-                        # This avoids "false resets" when passing through bodyweight during the jump.
-                        
-                        self.block_sum += display_kg
-                        self.block_count += 1
-                        
-                        if self.block_count >= 20:
-                            avg = self.block_sum / 20.0
-                            self.block_averages.append(avg)
-                            self.block_sum = 0
-                            self.block_count = 0
-                            
-                            # Keep only last 10 blocks (approx 300ms window)
-                            if len(self.block_averages) >= 10:
-                                self.block_averages = self.block_averages[-10:]
-                                
-                                b_min = min(self.block_averages)
-                                b_max = max(self.block_averages)
-                                noise_kg = b_max - b_min
-                                
-                                avg_val = sum(self.block_averages) / len(self.block_averages)
-                                diff_bw = abs(avg_val - self.jumper_mass_kg)
-                                
-                                # Check stability and bodyweight return
-                                # Using looser tolerance for bodyweight return (4x) to allow settling
-                                if noise_kg <= STABILITY_TOLERANCE_KG*2 and diff_bw <= STABILITY_TOLERANCE_KG*4: 
-                                    # Update bodyweight to the new stable value
-                                    self.jumper_mass_kg = avg_val
-                                    self.static_weight_raw = avg_val * raw_per_kg
-                                    
-                                    # Force emit result if we have stabilized early
-                                    res = self._try_emit_result(now, force=True)
-                                    if res:
-                                        result = res
-
-                                    self.state = "READY"
-                                    self._reset_integration_accumulators()
-                                    self.phase_start_velocity = 0.0
-                                    self.pending_result_data = None # Should be cleared by try_emit, but safety.
-
-                    if now - self.integration_start_time > MAX_PROPULSION_TIME_MS:
-                         self.state = "READY"
-                         self._reset_integration_accumulators()
+             if not self.weight_confirmed:
+                 self.state = "WEIGHING"
+                 if self.calibration_start_time == 0:
+                     self.calibration_start_time = now
+                     self.calibration_sum = 0
+                     self.calibration_count = 0
+                     self.block_sum = 0
+                     self.block_count = 0
+                     self.block_averages = []
+                 
+                 self.calibration_sum += weight
+                 self.calibration_count += 1
+                 
+                 self.block_sum += weight
+                 self.block_count += 1
+                 if self.block_count >= 30:
+                     self.block_averages.append(self.block_sum / 30.0)
+                     self.block_sum = 0
+                     self.block_count = 0
+                 
+                 if now - self.calibration_start_time >= 300:
+                     if len(self.block_averages) > 0:
+                         b_min = min(self.block_averages)
+                         b_max = max(self.block_averages)
+                         noise_kg = (b_max - b_min) / raw_per_kg
+                         
+                         if noise_kg <= STABILITY_TOLERANCE_KG:
+                             self.static_weight_raw = self.calibration_sum / self.calibration_count
+                             self.jumper_mass_kg = self.static_weight_raw / raw_per_kg
+                             self.weight_confirmed = True
+                             self.state = "READY"
+                     self.calibration_start_time = 0
+             else:
+                 # READY state - Check Trigger
+                 diff = abs(weight - self.static_weight_raw)
+                 if diff > MOVEMENT_THRESHOLD:
+                     self.state = "PROPULSION"
+                     self.integration_start_time = now
+                     self.jump_start_y = now
+                     self._retroactive_propulsion_fix(now)
+                 else:
+                     self.state = "READY"
+                     self.phase_start_velocity = 0.0 # Reset velocity if settled
 
         return {
             "state": self.state,

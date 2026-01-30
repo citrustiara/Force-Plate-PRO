@@ -278,10 +278,6 @@ class PhysicsEngine:
             
             if t >= integration_start_time:
                 effective_force_kg = force_kg
-                
-                # DEBUG: Trace why power might be zero
-                # if effective_force_kg * self.config["raw_per_kg"] < AIR_THRESHOLD:
-                #    print(f"[DEBUG_PHYS] Low Weight: {effective_force_kg:.2f}kg, Vel: {current_v:.2f}, Pwr: {force_n * current_v:.2f}")
 
                 # Ensure non-negative force (sensor noise/drift can cause <0, leading to positive Power)
                 effective_force_kg = max(0.0, effective_force_kg) 

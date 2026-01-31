@@ -1,6 +1,5 @@
 # Force Plate PRO
-**Author:** Maciej Łukasiewicz (Index: 197865)  
-**Project:** Embedded Systems Applications (Aplikacje Systemów Wbudowanych)
+**Author:** Maciej Łukasiewicz  
 
 ![Complete Force Plate](complete.jpg)
 *Figure 1. The assembled Force Plate PRO prototype (1m × 1m OSB).*

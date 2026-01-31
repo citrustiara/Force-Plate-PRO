@@ -50,6 +50,7 @@ class SingleJumpMode(PhysicsMode):
         self.pending_result_data = None
         self.result_emit_time = 0.0
         self.landing_protection_end_time = 0.0  # Bounce protection
+        self.low_weight_start_time = 0.0  # Step-off detection timer
 
     def reset_state(self):
         self.state = "IDLE"
@@ -69,7 +70,9 @@ class SingleJumpMode(PhysicsMode):
         self.phase_start_velocity = 0.0
         self.pending_result_data = None
         self.result_emit_time = 0.0
+        self.result_emit_time = 0.0
         self.landing_protection_end_time = 0.0
+        self.low_weight_start_time = 0.0
 
     def _reset_integration_accumulators(self):
         self.current_velocity = 0.0
@@ -203,12 +206,11 @@ class SingleJumpMode(PhysicsMode):
                     
                     self.phase_start_velocity = v_impact
                     
-                else:
-                    # Short air time - if we have pending result (came from LANDING), return to LANDING
-                    if self.pending_result_data is not None:
-                        self.state = "LANDING"
-                    else:
-                        self.state = "READY"
+                # else:
+                #     # Ignore short spikes (board bounce) < MIN_AIR_TIME.
+                #     # We interpret high weight shortly after takeoff as vibration/bounce, 
+                #     # not a true landing. Stay in IN_AIR.
+                #     pass
                         
             elif current_air_time > MAX_AIR_TIME:
                 self.state = "IDLE"
@@ -251,6 +253,24 @@ class SingleJumpMode(PhysicsMode):
              if self.state == "LANDING":
                  res = self._try_emit_result(now)
                  if res: result = res
+
+             # --- STEP-OFF DETECTION ---
+             # If user steps off (weight=0) while velocity < 0 (free fall from physics pov), return to IDLE
+             if weight < AIR_THRESHOLD and self.current_velocity < 0:
+                 if self.low_weight_start_time == 0:
+                     self.low_weight_start_time = now
+                 elif now - self.low_weight_start_time > 500: # 0.5s timeout
+                     self.state = "IDLE"
+                     self.weight_confirmed = False
+                     self.jumper_mass_kg = 0
+                     self.current_velocity = 0
+                     self._reset_integration_accumulators()
+                     return {
+                        "state": self.state, "kg": display_kg, "display_kg": display_kg,
+                        "result": result, "jumper_mass_kg": 0, "velocity": 0
+                     }
+             else:
+                 self.low_weight_start_time = 0
 
              if self.jumper_mass_kg > 0 and now - self.integration_start_time <= MAX_PROPULSION_TIME_MS:
                  force_n = (raw / raw_per_kg) * gravity
@@ -323,8 +343,8 @@ class SingleJumpMode(PhysicsMode):
                  
                  self.block_sum += weight
                  self.block_count += 1
-                 if self.block_count >= 30:
-                     self.block_averages.append(self.block_sum / 30.0)
+                 if self.block_count >= 25:
+                     self.block_averages.append(self.block_sum / 25.0)
                      self.block_sum = 0
                      self.block_count = 0
                  

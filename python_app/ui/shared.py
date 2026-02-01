@@ -48,6 +48,14 @@ def create_shared_content():
                         dpg.add_line_series([], [], label="CT End", tag="plot_line_series_ct_end")
                         dpg.bind_item_theme("plot_line_series_ct_start", "theme_ct_marker")
                         dpg.bind_item_theme("plot_line_series_ct_end", "theme_ct_marker")
+                        
+                        # Phase Markers (vertical lines at phase boundaries)
+                        dpg.add_line_series([], [], label="Unweight", tag="plot_line_phase_unweight")
+                        dpg.add_line_series([], [], label="Braking", tag="plot_line_phase_braking")  
+                        dpg.add_line_series([], [], label="Propulsion", tag="plot_line_phase_propulsion")
+                        dpg.bind_item_theme("plot_line_phase_unweight", "theme_phase_unweight")
+                        dpg.bind_item_theme("plot_line_phase_braking", "theme_phase_braking")
+                        dpg.bind_item_theme("plot_line_phase_propulsion", "theme_phase_propulsion")
 
                     with dpg.plot_axis(dpg.mvYAxis, label="Power (W)", tag="y_axis_power"):
                         dpg.add_line_series([], [], label="Power", tag="plot_line_series_power", parent="y_axis_power")

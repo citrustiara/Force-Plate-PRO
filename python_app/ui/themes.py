@@ -41,3 +41,16 @@ def setup_themes():
     with dpg.theme(tag="theme_ct_marker"):
         with dpg.theme_component(dpg.mvLineSeries):
             dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 128, 0), category=dpg.mvThemeCat_Core)
+
+    # Phase Marker Themes
+    with dpg.theme(tag="theme_phase_unweight"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (255, 100, 100), category=dpg.mvThemeCat_Core)  # Red
+    
+    with dpg.theme(tag="theme_phase_braking"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (100, 100, 255), category=dpg.mvThemeCat_Core)  # Blue
+    
+    with dpg.theme(tag="theme_phase_propulsion"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (100, 255, 100), category=dpg.mvThemeCat_Core)  # Green

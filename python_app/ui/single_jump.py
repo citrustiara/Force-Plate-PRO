@@ -86,6 +86,10 @@ class SingleJumpController(ModeController):
                 with dpg.group():
                     dpg.add_text("PROPULSION", color=(100, 255, 100))
                     dpg.add_text("-- ms", tag="met_s_phase_propulsion", color=(100, 255, 100))
+                dpg.add_spacer(width=30)
+                with dpg.group():
+                    dpg.add_text("SQUAT EST.", color=(255, 200, 100))
+                    dpg.add_text("-- kg", tag="met_s_squat_est", color=(255, 200, 100))
             
             dpg.add_separator()
             
@@ -182,6 +186,10 @@ class SingleJumpController(ModeController):
                  dpg.set_value("met_s_phase_unweight", "--")
                  dpg.set_value("met_s_phase_braking", "--")
                  dpg.set_value("met_s_phase_propulsion", "--")
+             
+             # Squat estimation
+             squat_est = selected_jump.get('squat_estimation', 0)
+             dpg.set_value("met_s_squat_est", f"{squat_est:.1f} kg" if squat_est > 0 else "--")
         else:
              # Clear metrics
              dpg.set_value("met_s_height", "--")
@@ -199,6 +207,7 @@ class SingleJumpController(ModeController):
              dpg.set_value("met_s_phase_unweight", "--")
              dpg.set_value("met_s_phase_braking", "--")
              dpg.set_value("met_s_phase_propulsion", "--")
+             dpg.set_value("met_s_squat_est", "--")
 
 def create_single_jump_header():
     """Backwards compatibility wrapper to create UI"""

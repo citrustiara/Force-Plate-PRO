@@ -59,8 +59,13 @@ class SingleJumpMode(PhysicsMode):
         self.min_velocity = 0.0
         self.min_velocity_time = 0.0
         self.zero_crossing_time = 0.0
-        self.unweighting_start_time = 0.0  # When velocity first left ~0 going negative
+        self.unweighting_start_time = 0.0  # When force first left bodyweight
         self.unweighting_detected = False  # Flag to detect unweighting start once
+        self.peak_power_time = 0.0  # When peak power occurred
+        
+        # Propulsion force tracking (for squat estimation)
+        self.propulsion_force_sum = 0.0
+        self.propulsion_force_count = 0
         
         # Saved phase times (captured at takeoff for result reporting)
         self.saved_phase_times = None
@@ -94,6 +99,9 @@ class SingleJumpMode(PhysicsMode):
         self.zero_crossing_time = 0.0
         self.unweighting_start_time = 0.0
         self.unweighting_detected = False
+        self.peak_power_time = 0.0
+        self.propulsion_force_sum = 0.0
+        self.propulsion_force_count = 0
         self.saved_phase_times = None
 
     def _reset_integration_accumulators(self):
@@ -111,6 +119,9 @@ class SingleJumpMode(PhysicsMode):
         self.zero_crossing_time = 0.0
         self.unweighting_start_time = 0.0
         self.unweighting_detected = False
+        self.peak_power_time = 0.0
+        self.propulsion_force_sum = 0.0
+        self.propulsion_force_count = 0
         self.saved_phase_times = None
 
     def _try_emit_result(self, now, force=False):
@@ -153,7 +164,9 @@ class SingleJumpMode(PhysicsMode):
             "avg_power_start_time": d["avg_power_start_time"],
             # Phase timing data
             "phase_times": d.get("phase_times"),
-            "curve_start_time": d["graph_start_time_y"] - 600
+            "curve_start_time": d["graph_start_time_y"] - 600,
+            # Squat estimation
+            "squat_estimation": d.get("squat_estimation", 0)
         }
         
         self.pending_result_data = None
@@ -252,6 +265,12 @@ class SingleJumpMode(PhysicsMode):
         # Height from impulse-momentum
         height_impulse = (self.last_takeoff_velocity**2) / (2 * gravity) * 100.0
         
+        # Squat estimation: avg propulsion force - bodyweight - 5kg
+        avg_propulsion_force = 0.0
+        if self.propulsion_force_count > 0:
+            avg_propulsion_force = self.propulsion_force_sum / self.propulsion_force_count
+        squat_estimation = max(0, (avg_propulsion_force - self.jumper_mass_kg)*1.25)
+        
         # Store result for delayed emission (to capture landing graph)
         self.pending_result_data = {
             "timestamp": self.landing_time,
@@ -269,7 +288,8 @@ class SingleJumpMode(PhysicsMode):
             "avg_power_start_time": self.integration_start_time,
             "graph_start_velocity": self.phase_start_velocity,
             "graph_start_time_y": self.jump_start_y,
-            "phase_times": self.saved_phase_times  # Phase timing data
+            "phase_times": self.saved_phase_times,  # Phase timing data
+            "squat_estimation": squat_estimation  # Estimated squat max
         }
         self.result_emit_time = now + 600  # 600ms delay to capture landing
         
@@ -340,23 +360,38 @@ class SingleJumpMode(PhysicsMode):
         # --- Phase transition detection ---
         
         # Detect unweighting start: when velocity drops below -0.1 for the first time,
-        # look back to find where velocity was ~0 (between 0 and -0.02)
+        # look back to find where force was ~= bodyweight (net force ~= 0)
         if not self.unweighting_detected and self.current_velocity < -0.1:
             self.unweighting_detected = True
             self.unweighting_start_time = self._find_unweighting_start()
         
         # Track minimum velocity (end of unweighting phase)
-        if self.current_velocity < self.min_velocity:
+        # Only track if unweighting has been detected
+        if self.unweighting_detected and self.current_velocity < self.min_velocity:
             self.min_velocity = self.current_velocity
             self.min_velocity_time = now
         
         # Track zero crossing (start of propulsion phase)
-        # Detected when velocity crosses from negative to positive
-        if prev_vel < 0 and self.current_velocity >= 0 and self.zero_crossing_time == 0:
+        # Must satisfy ALL conditions:
+        # 1. Unweighting was detected and start time is set
+        # 2. Min velocity has been reached (braking started)
+        # 3. Min velocity was significantly negative (real countermovement, not noise)
+        # 4. Velocity is crossing from negative to positive
+        has_valid_unweighting = self.unweighting_detected and self.unweighting_start_time > 0
+        has_valid_braking = self.min_velocity_time > 0 and self.min_velocity < -0.05
+        is_crossing_zero = prev_vel < 0 and self.current_velocity >= 0
+        
+        if has_valid_unweighting and has_valid_braking and is_crossing_zero and self.zero_crossing_time == 0:
             self.zero_crossing_time = now
         
         if force_n > self.max_propulsion_force:
             self.max_propulsion_force = force_n
+        
+        # Track propulsion phase force (for squat estimation)
+        # Only count from zero crossing (vel=0) until peak power
+        if self.zero_crossing_time > 0 and self.current_velocity > 0:
+            self.propulsion_force_sum += display_kg
+            self.propulsion_force_count += 1
         
         # Only count positive power (pushing up)
         if self.current_velocity > 0:
@@ -365,10 +400,11 @@ class SingleJumpMode(PhysicsMode):
         
         if instant_power > self.peak_power:
             self.peak_power = instant_power
+            self.peak_power_time = now  # Track when peak power occurred
     
     def _find_unweighting_start(self):
         """
-        Look back through buffer to find where velocity was ~0 (between 0 and -0.02).
+        Look back through buffer to find where force was ~= bodyweight (net force ~= 0).
         This is the true start of the unweighting phase.
         """
         engine = self.engine
@@ -407,16 +443,11 @@ class SingleJumpMode(PhysicsMode):
                     iter_dt = d / 1000000.0
             last_u = b[2]
             
-            # Before integration, check if velocity is in ~0 range
-            if -0.02 <= v <= 0.02:
-                last_zero_time = b[0]
-            
-            # Integrate
+            # Check if force is close to bodyweight (net force ~= 0)
+            # This indicates the neutral position before unweighting started
             force_kg = b[1]
-            net_kg = force_kg - self.jumper_mass_kg
-            net_force_n = net_kg * gravity
-            acc = net_force_n / self.jumper_mass_kg
-            v += acc * iter_dt
+            if abs(force_kg - self.jumper_mass_kg) < 0.5:
+                last_zero_time = b[0]
             
             i = (i + 1) % engine.BUFFER_SIZE
             steps += 1

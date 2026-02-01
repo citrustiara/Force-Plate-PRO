@@ -74,6 +74,9 @@ class PlotManager:
             dpg.set_value("plot_line_series_vel", [[], []])
             dpg.set_value("plot_line_series_ct_start", [[], []])
             dpg.set_value("plot_line_series_ct_end", [[], []])
+            dpg.set_value("plot_line_phase_unweight", [[], []])
+            dpg.set_value("plot_line_phase_braking", [[], []])
+            dpg.set_value("plot_line_phase_propulsion", [[], []])
             
             # Update hover data
             from .callbacks import update_current_plot_data
@@ -138,6 +141,40 @@ class PlotManager:
         
         from .callbacks import update_current_plot_data
         update_current_plot_data(xs, ys, ps if has_power else [], vs if has_vel else [])
+
+        # Phase Markers (vertical lines at phase boundaries)
+        phase_times = jump_data.get('phase_times')
+        curve_start = jump_data.get('curve_start_time')
+        max_y = np.max(ys) if len(ys) > 0 else 200
+        
+        if phase_times and curve_start:
+            # Unweight start (when velocity left ~0)
+            t_unweight = phase_times.get('unweighting_start', 0)
+            if t_unweight > 0:
+                x_unweight = (t_unweight - curve_start) / 1000.0
+                dpg.set_value("plot_line_phase_unweight", [[x_unweight, x_unweight], [0, max_y]])
+            else:
+                dpg.set_value("plot_line_phase_unweight", [[], []])
+            
+            # Braking start (min velocity time)
+            t_braking = phase_times.get('min_velocity_time', 0)
+            if t_braking > 0:
+                x_braking = (t_braking - curve_start) / 1000.0
+                dpg.set_value("plot_line_phase_braking", [[x_braking, x_braking], [0, max_y]])
+            else:
+                dpg.set_value("plot_line_phase_braking", [[], []])
+            
+            # Propulsion start (zero crossing time)
+            t_propulsion = phase_times.get('zero_crossing_time', 0)
+            if t_propulsion > 0:
+                x_propulsion = (t_propulsion - curve_start) / 1000.0
+                dpg.set_value("plot_line_phase_propulsion", [[x_propulsion, x_propulsion], [0, max_y]])
+            else:
+                dpg.set_value("plot_line_phase_propulsion", [[], []])
+        else:
+            dpg.set_value("plot_line_phase_unweight", [[], []])
+            dpg.set_value("plot_line_phase_braking", [[], []])
+            dpg.set_value("plot_line_phase_propulsion", [[], []])
 
         dpg.fit_axis_data("x_axis")
         dpg.fit_axis_data("y_axis")

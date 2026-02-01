@@ -73,6 +73,22 @@ class SingleJumpController(ModeController):
             
             dpg.add_separator()
             
+            # --- PHASE TIMING METRICS ---
+            with dpg.group(horizontal=True):
+                with dpg.group():
+                    dpg.add_text("UNWEIGHTING", color=(255, 100, 100))
+                    dpg.add_text("-- ms", tag="met_s_phase_unweight", color=(255, 100, 100))
+                dpg.add_spacer(width=20)
+                with dpg.group():
+                    dpg.add_text("BRAKING", color=(100, 100, 255))
+                    dpg.add_text("-- ms", tag="met_s_phase_braking", color=(100, 100, 255))
+                dpg.add_spacer(width=20)
+                with dpg.group():
+                    dpg.add_text("PROPULSION", color=(100, 255, 100))
+                    dpg.add_text("-- ms", tag="met_s_phase_propulsion", color=(100, 255, 100))
+            
+            dpg.add_separator()
+            
             # --- METRICS GROUP 2 (DEBUG / DETAILS) ---
             with dpg.collapsing_header(label="Debug / Additional Metrics", default_open=True):
                 with dpg.group(horizontal=True):
@@ -145,6 +161,27 @@ class SingleJumpController(ModeController):
              dpg.set_value("met_s_vel_flight", self.safe_fmt(selected_jump.get('velocity_flight'), 'm/s', ".2f"))
              
              dpg.set_value("met_s_mass", f"{mass:.1f} kg" if mass else "--")
+             
+             # Phase times
+             phase_times = selected_jump.get('phase_times')
+             if phase_times:
+                 t_start = phase_times.get('unweighting_start', 0)
+                 t_min_vel = phase_times.get('min_velocity_time', 0)
+                 t_zero = phase_times.get('zero_crossing_time', 0)
+                 t_takeoff = phase_times.get('takeoff_time', 0)
+                 
+                 # Calculate phase durations
+                 unweight_time = (t_min_vel - t_start) if (t_start > 0 and t_min_vel > 0) else 0
+                 braking_time = (t_zero - t_min_vel) if (t_min_vel > 0 and t_zero > 0) else 0
+                 propulsion_time = (t_takeoff - t_zero) if (t_zero > 0 and t_takeoff > 0) else 0
+                 
+                 dpg.set_value("met_s_phase_unweight", f"{unweight_time:.0f} ms" if unweight_time > 0 else "--")
+                 dpg.set_value("met_s_phase_braking", f"{braking_time:.0f} ms" if braking_time > 0 else "--")
+                 dpg.set_value("met_s_phase_propulsion", f"{propulsion_time:.0f} ms" if propulsion_time > 0 else "--")
+             else:
+                 dpg.set_value("met_s_phase_unweight", "--")
+                 dpg.set_value("met_s_phase_braking", "--")
+                 dpg.set_value("met_s_phase_propulsion", "--")
         else:
              # Clear metrics
              dpg.set_value("met_s_height", "--")
@@ -159,6 +196,9 @@ class SingleJumpController(ModeController):
              dpg.set_value("met_s_peak_pwr_w_kg", "--")
              dpg.set_value("met_s_vel", "--")
              dpg.set_value("met_s_vel_flight", "--")
+             dpg.set_value("met_s_phase_unweight", "--")
+             dpg.set_value("met_s_phase_braking", "--")
+             dpg.set_value("met_s_phase_propulsion", "--")
 
 def create_single_jump_header():
     """Backwards compatibility wrapper to create UI"""

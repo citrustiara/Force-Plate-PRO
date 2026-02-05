@@ -150,6 +150,35 @@ class PhysicsEngine:
         self.buf_idx = (self.buf_idx + 1) % BUFFER_SIZE
         if self.buf_idx == 0:
             self.buf_full = True
+
+    def get_buffer_average(self, count):
+        """Get average weight from the last 'count' samples."""
+        if count <= 0:
+            return 0.0
+            
+        # If buffer isn't full and not enough samples, just take what we have
+        total_available = BUFFER_SIZE if self.buf_full else self.buf_idx
+        if total_available == 0:
+            return 0.0
+            
+        count = min(count, total_available)
+        
+        # Calculate indices
+        end_idx = self.buf_idx
+        start_idx = (end_idx - count) % BUFFER_SIZE
+        
+        if start_idx < end_idx:
+            # Contiguous chunk
+            chunk = self.buffer[start_idx:end_idx, 1]
+            return np.mean(chunk)
+        else:
+            # Wrap around
+            chunk1 = self.buffer[start_idx:, 1]
+            chunk2 = self.buffer[:end_idx, 1]
+            # Weighted average or just sum both and divide
+            s1 = np.sum(chunk1)
+            s2 = np.sum(chunk2)
+            return (s1 + s2) / count
             
     # Proxy properties for backward compatibility / easy access if needed
     @property

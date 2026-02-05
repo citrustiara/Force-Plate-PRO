@@ -115,9 +115,14 @@ The system uses the **Impulse-Momentum Method** to calculate jump metrics from F
 4.  **Power:** $P(t) = F_{measured}(t) \cdot v(t)$
 
 **Key Algorithmic Features:**
-*   **Retroactive Trigger:** When movement is detected, the integration start time is moved back ~75ms to capture the initial unweighting phase accurately.
-*   **Drift Compensation:** Sensor zero-point is automatically tracked during IDLE states.
-*   **Noise Clamping:** Negative sensor noise during deep unweighting is clamped to prevent "Positive Power" artifacts (since Force < 0 is physically impossible on a platform).
+*   **Retroactive Pulse Integration:** The system buffers data continuously. When movement is detected, it "rewinds" integration by ~75ms to capture the critical initial start of the movement that occurred before the trigger threshold was crossed.
+*   **Automatic Phase Detection:** Robustly identifies jump phases by analyzing velocity crossings. It strictly distinguishes between *Unweighting* and *Flight* based on velocity and time of the low weight period.
+*   **Dynamic Stability Check:** During weighing, the system calculates running stats (mean/variance) on 300ms windows to ensure the user is perfectly still before locking in bodyweight.
+*   **Drift Compensation:** Smart auto-tare logic monitors the platform during IDLE states. If determining that the platform is empty but the weight has drifted (>0.2kg) after 10 seconds of inactivity, it automatically re-zeros the sensors.
+*   **Impulse-Momentum Method:** Calculates jump height by integrating acceleration to find Takeoff Velocity ($v_{takeoff}^2 / 2g$).
+*   **Flight Time Method:** Independently calculates height from air time, allowing for comparison between methods ($g \cdot t_{flight}^2 / 8$).
+*   **Continuous Jump Physics:** For rebound jumps, the impact velocity is derived directly from the previous jump's **Flight Time**, ensuring extremely accurate momentum conservation for the next takeoff.
+*   **Bounce Protection:** Intelligent filtering uses a minimum air-time threshold to ignore platform vibrations/bounciness immediately after takeoff, preventing false landing detections.
 
 ![App Screenshot](images/example.png)
 *Figure 8. Desktop Application Interface showing Force, Velocity, and Power curves.*

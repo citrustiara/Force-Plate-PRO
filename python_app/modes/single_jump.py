@@ -74,6 +74,8 @@ class SingleJumpMode(PhysicsMode):
         self.landing_protection_end_time = 0.0
         self.low_weight_start_time = 0.0
 
+        self.idle_start_time = 0.0
+
     def reset_state(self):
         """Reset all state variables to initial values."""
         self.state = "IDLE"
@@ -103,6 +105,7 @@ class SingleJumpMode(PhysicsMode):
         self.propulsion_force_sum = 0.0
         self.propulsion_force_count = 0
         self.saved_phase_times = None
+        self.idle_start_time = 0.0
 
     def _reset_integration_accumulators(self):
         """Reset physics integration variables for a new phase."""
@@ -243,6 +246,19 @@ class SingleJumpMode(PhysicsMode):
                 self.jumper_mass_kg = 0
             self.state = "IDLE"
             self.calibration_start_time = 0
+            # if idle for > ~10s and weight has drifted, auto-tare
+            if self.idle_start_time == 0:
+                self.idle_start_time = now
+            elif now - self.idle_start_time > 10000:
+                avg_val = self.engine.get_buffer_average(150)
+                current_kg = avg_val
+                
+                # Only tare if we are off by more than 0.2kg
+                if abs(current_kg) > 0.2:
+                    print("Auto taring..." , current_kg)
+                    self.engine.start_tare()
+                
+                self.idle_start_time = now
             return self._make_response(display_kg, result)
 
         # 4. Active integration (PROPULSION or LANDING)

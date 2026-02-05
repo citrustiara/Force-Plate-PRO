@@ -15,7 +15,9 @@ from ui.callbacks import (
     on_new_jump, 
     get_selected_jump, 
     get_jump_history,
-    is_autofit_enabled
+    is_autofit_enabled,
+    auto_connect,
+    update_connection_status
 )
 from ui.main_menu import create_main_menu
 from ui.shared import create_shared_content
@@ -73,13 +75,17 @@ def main():
     current_controller = get_controller(current_mode_name)
     
     # --- MAIN LOOP ---
-    dpg.create_viewport(title='ForcePlatePRO', width=1600, height=1000)
+    dpg.create_viewport(title='ForcePlatePRO', width=1600, height=1050)
     dpg.setup_dearpygui()
     dpg.show_viewport()
     dpg.set_primary_window("Primary Window", True)
 
     last_update = time.time()
+    last_connection_check = 0
     last_selected_jump_id = None
+    
+    # Initial auto-connect attempt
+    auto_connect()
     
     # Ensure initial state matches
     if current_controller:
@@ -87,6 +93,14 @@ def main():
 
     while dpg.is_dearpygui_running():
         now = time.time()
+        
+        # Connection monitoring - retry every 1 second if not connected
+        if now - last_connection_check > 1.0:
+            last_connection_check = now
+            if not serial_handler.connected:
+                auto_connect()
+            else:
+                update_connection_status(True)
         
         # 1. Mode Switching Check
         if physics.active_mode_name != current_mode_name:

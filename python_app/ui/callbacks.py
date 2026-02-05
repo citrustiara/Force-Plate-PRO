@@ -71,30 +71,57 @@ def is_autofit_enabled():
     return _auto_fit_y
 
 
-def connect_callback(sender, app_data):
-    """Handle connect/disconnect button."""
-    if not _serial_handler.connected:
-        ports = _serial_handler.list_ports()
-        target_port = ports[0] if ports else None
-        for p in ports:
-            if "COM9" in p:
-                target_port = p
-                break
-        if target_port and _serial_handler.connect(target_port):
-            dpg.configure_item("txt_status_s", default_value=f"Connected: {target_port}", color=(0, 255, 0))
-            dpg.configure_item("txt_status_e", default_value=f"Connected: {target_port}", color=(0, 255, 0))
-            dpg.configure_item("txt_status_c", default_value=f"Connected: {target_port}", color=(0, 255, 0))
-            dpg.set_item_label("btn_connect_s", "Disconnect")
-            dpg.set_item_label("btn_connect_e", "Disconnect")
-            dpg.set_item_label("btn_connect_c", "Disconnect")
-    else:
+def reset_connection_callback(sender=None, app_data=None):
+    """Disconnect then reconnect after 100ms."""
+    import threading
+    
+    def do_reconnect():
+        import time
         _serial_handler.disconnect()
-        dpg.configure_item("txt_status_s", default_value="Disconnected", color=(255, 0, 0))
-        dpg.configure_item("txt_status_e", default_value="Disconnected", color=(255, 0, 0))
-        dpg.configure_item("txt_status_c", default_value="Disconnected", color=(255, 0, 0))
-        dpg.set_item_label("btn_connect_s", "Connect")
-        dpg.set_item_label("btn_connect_e", "Connect")
-        dpg.set_item_label("btn_connect_c", "Connect")
+        time.sleep(0.1)
+        auto_connect()
+    
+    threading.Thread(target=do_reconnect, daemon=True).start()
+
+
+def reset_platform_callback(sender=None, app_data=None):
+    """Send reset command to ESP32."""
+    if _serial_handler.connected:
+        _serial_handler.send_reset()
+
+
+def auto_connect():
+    """Attempt to connect to the first available port (preferring COM9)."""
+    if _serial_handler.connected:
+        return True
+    
+    ports = _serial_handler.list_ports()
+    target_port = ports[0] if ports else None
+    for p in ports:
+        if "COM9" in p:
+            target_port = p
+            break
+    
+    if target_port and _serial_handler.connect(target_port):
+        update_connection_status(True, target_port)
+        return True
+    else:
+        update_connection_status(False)
+        return False
+
+
+def update_connection_status(connected, port_name=""):
+    """Update connection status indicator (colored circle)."""
+    if connected:
+        # Green circle
+        dpg.configure_item("connection_circle_s", fill=(0, 200, 0, 255))
+        dpg.configure_item("connection_circle_e", fill=(0, 200, 0, 255))
+        dpg.configure_item("connection_circle_c", fill=(0, 200, 0, 255))
+    else:
+        # Red circle
+        dpg.configure_item("connection_circle_s", fill=(200, 0, 0, 255))
+        dpg.configure_item("connection_circle_e", fill=(200, 0, 0, 255))
+        dpg.configure_item("connection_circle_c", fill=(200, 0, 0, 255))
 
 
 def tare_callback():

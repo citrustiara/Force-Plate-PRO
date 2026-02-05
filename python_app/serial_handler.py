@@ -94,11 +94,9 @@ class SerialHandler:
                 
                 # Handling message types
                 if "w" in data:
+                    # Only raw value needed - physics uses 1/frequency for timing
                     w = data["w"]
-                    t = data.get("t", 0)
-                    # Timestamp in ms for logic
-                    now = time.time() * 1000 
-                    res = self.physics.process_sample(w, now, t)
+                    res = self.physics.process_sample(w)
                     
                     if res["result"] and self.on_jump_callback:
                         self.on_jump_callback(res["result"])
@@ -110,6 +108,32 @@ class SerialHandler:
                         print(f"Frequency set to {data['hz']} Hz")
                     elif evt == "zero":
                         print("Device Auto-Zeroed")
+                    elif evt == "tare_start":
+                        print("Tare started")
+                    elif evt == "tare_retry":
+                        print(f"Tare retry (noise: {data.get('noise', '?')})")
+                    elif evt == "resetting":
+                        print("Device resetting...")
                         
             except json.JSONDecodeError:
                 pass
+
+    def send_command(self, cmd_name):
+        """Send a command to the ESP32."""
+        if self.connected and self.serial_port and self.serial_port.is_open:
+            try:
+                cmd = json.dumps({"cmd": cmd_name}) + "\n"
+                self.serial_port.write(cmd.encode('utf-8'))
+                return True
+            except Exception as e:
+                print(f"Send command error: {e}")
+                return False
+        return False
+
+    def send_tare(self):
+        """Request ESP32 to re-zero the scale."""
+        return self.send_command("tare")
+
+    def send_reset(self):
+        """Request ESP32 to restart."""
+        return self.send_command("reset")

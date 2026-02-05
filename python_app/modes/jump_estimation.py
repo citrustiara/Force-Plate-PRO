@@ -46,7 +46,7 @@ class JumpEstimationMode(PhysicsMode):
     def set_start_velocity(self, vel):
         self.manual_start_velocity = vel
     
-    def process_sample(self, raw, timestamp, micros, now, dt):
+    def process_sample(self, raw, now, dt):
         engine = self.engine
         raw_per_kg = engine.config["raw_per_kg"]
         gravity = engine.config["gravity"]
@@ -207,22 +207,13 @@ class JumpEstimationMode(PhysicsMode):
         self.power_sample_count = 0
         self.max_propulsion_force = 0
         
-        last_buf_micros = engine.buffer[start_index][2]
-        if last_buf_micros == 0:
-            last_buf_micros = engine.buffer[start_index][0] * 1000
+        # Fixed dt from frequency
+        iter_dt = 1.0 / engine.config["frequency"]
             
         steps = 0
         i = start_index
         while i != engine.buf_idx:
             b = engine.buffer[i]
-            iter_dt = 1.0 / engine.config["frequency"]
-            if b[2] > 0 and last_buf_micros > 0:
-                d = b[2] - last_buf_micros
-                if d < 0:
-                    d += 4294967295
-                if 0 < d < 100000:
-                    iter_dt = d / 1000000.0
-            last_buf_micros = b[2]
             
             force_kg = b[1]
             net_kg = force_kg - self.manual_mass_kg

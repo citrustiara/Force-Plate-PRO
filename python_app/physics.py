@@ -16,14 +16,13 @@ class PhysicsEngine:
         if config:
             self.config.update(config)
 
-        # Buffers - Fixed Size NumPy Array
-        # Columns: 0=MsgTimestamp(ms), 1=Weight(kg), 2=PrevMicros
-        self.buffer = np.zeros((BUFFER_SIZE, 3), dtype=np.float64)
+        # Circular buffer for physics data
+        # Columns: 0=Time(ms), 1=Weight(kg)
+        self.buffer = np.zeros((BUFFER_SIZE, 2), dtype=np.float64)
         self.buf_idx = 0
         self.buf_full = False
         self.BUFFER_SIZE = BUFFER_SIZE # Access for modes
 
-        self.last_micros = 0
         self.logic_time = 0.0
         
         # Tare Logic
@@ -67,7 +66,6 @@ class PhysicsEngine:
 
     def reset_state(self):
         self.logic_time = 0.0
-        self.last_micros = 0
         self.tare_sum = 0
         self.tare_count = 0
         self.is_taring = False
@@ -111,6 +109,10 @@ class PhysicsEngine:
             if self.tare_count > 0:
                 self.zero_offset = self.tare_sum / self.tare_count
             self.is_taring = False
+            # Clear buffer to avoid visual artifacts from old timestamps
+            self.buffer.fill(0)
+            self.buf_idx = 0
+            self.buf_full = False
             self.reset_state()
 
     def start_calibrate(self, known_weight_kg):
@@ -142,8 +144,9 @@ class PhysicsEngine:
             self.is_calibrating = False
             self.reset_state()
 
-    def add_to_buffer(self, t, w, u):
-        self.buffer[self.buf_idx] = [t, w, u]
+    def add_to_buffer(self, t, w):
+        """Add a sample to the circular buffer."""
+        self.buffer[self.buf_idx] = [t, w]
         self.buf_idx = (self.buf_idx + 1) % BUFFER_SIZE
         if self.buf_idx == 0:
             self.buf_full = True
@@ -173,39 +176,17 @@ class PhysicsEngine:
         mask = ordered[:, 0] >= start_time
         return ordered[mask]
 
-    def process_sample(self, raw, timestamp, micros=0):
-        # DT Calculation
+    def process_sample(self, raw):
+        """Process a single raw sample from the device.
+        
+        Uses fixed 1/frequency for dt - ADC has stable crystal timing.
+        """
+        # Fixed DT from frequency (ADC timing is deterministic)  
         dt = 1.0 / self.config["frequency"]
+        dt_ms = 1000.0 / self.config["frequency"]
         
-        if micros > 0 and self.last_micros > 0:
-            diff = micros - self.last_micros
-            if diff < 0:
-                diff += 4294967295  # wrap uint32
-            
-            if 0 < diff < 100000:
-                dt = diff / 1000000.0
-        
-        # Update Logic Time
-        if micros > 0:
-            if self.last_micros > 0:
-                diff = micros - self.last_micros
-                if diff < 0:
-                    diff += 4294967295
-                
-                if 0 < diff < 1000000:
-                    self.logic_time += (diff / 1000.0)
-                else:
-                    self.logic_time += (1000.0 / self.config["frequency"])
-            else:
-                self.logic_time = timestamp
-            
-            self.last_micros = micros
-        else:
-            if self.logic_time == 0:
-                self.logic_time = timestamp
-            else:
-                self.logic_time += (1000.0 / self.config["frequency"])
-                
+        # Update logic time with fixed increment
+        self.logic_time += dt_ms
         now = self.logic_time
         
         # Tare Logic Intercept
@@ -229,11 +210,12 @@ class PhysicsEngine:
                 "display_kg": display_kg,
                 "result": None
             }
-        # Delegate to Mode
-        result_dict = self.active_mode.process_sample(raw, timestamp, micros, now, dt)
         
-        # ADD TO BUFFER
-        self.add_to_buffer(now, result_dict["display_kg"], micros)
+        # Delegate to Mode
+        result_dict = self.active_mode.process_sample(raw, now, dt)
+        
+        # ADD TO BUFFER (only time and weight needed)
+        self.add_to_buffer(now, result_dict["display_kg"])
         
         return result_dict
 
@@ -250,9 +232,11 @@ class PhysicsEngine:
         mask = ordered[:, 0] >= start_time
         relevant = ordered[mask]
         
-        v = 0.0 # Accumulator for Delta V
+        v = 0.0  # Accumulator for Delta V
         # Actual velocity at any point is start_velocity + v
-        last_u = relevant[0][2] if len(relevant) > 0 else 0
+        
+        # Fixed dt from frequency
+        dt = 1.0 / self.config["frequency"]
         
         curve = []
         
@@ -260,15 +244,6 @@ class PhysicsEngine:
             sample = relevant[i]
             t = sample[0]
             w = sample[1]
-            u = sample[2]
-            
-            dt = 1.0 / self.config["frequency"]
-            if u > 0 and last_u > 0:
-                d = u - last_u
-                if d < 0: d += 4294967295
-                if 0 < d < 100000:
-                    dt = d / 1000000.0
-            last_u = u
             
             force_kg = w
             p = 0.0

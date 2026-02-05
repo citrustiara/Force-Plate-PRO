@@ -25,7 +25,7 @@ class ContactTimeMode(PhysicsMode):
         self.max_force = 0.0
         self.in_air_duration = 0.0
 
-    def process_sample(self, raw, timestamp, micros, now, dt):
+    def process_sample(self, raw, now, dt):
         engine = self.engine
         raw_per_kg = engine.config["raw_per_kg"]
         

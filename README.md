@@ -1,7 +1,7 @@
 # Force Plate PRO
 **Author:** Maciej Łukasiewicz  
 
-![Complete Force Plate](complete.jpg)
+![Complete Force Plate](images/complete.jpg)
 *Figure 1. The assembled Force Plate PRO prototype (1m × 1m OSB).*
 
 ## 1. Introduction
@@ -20,11 +20,11 @@ The platform uses **8 half-bridge strain gauge load cells** (50kg capacity each)
 
 <div style="display: flex; gap: 10px;">
   <div style="flex: 1; text-align: center;">
-    <img src="loadcell2.png" alt="Load Cell" height="250" />
+    <img src="images/loadcell2.png" alt="Load Cell" height="250" />
     <p><em>Fig 2. Strain Gauge Load Cell</em></p>
   </div>
   <div style="flex: 1; text-align: center;">
-    <img src="top.jpg" alt="Sensor Layout" height="250" />
+    <img src="images/top.jpg" alt="Sensor Layout" height="250" />
     <p><em>Fig 3. Octagonal Sensor Layout</em></p>
   </div>
 </div>
@@ -46,7 +46,7 @@ The sensors are paired (Top-Left, Top-Right, Bottom-Left, Bottom-Right).
     - **TR Red** $\rightarrow$ **A+** (Signal +)
     - **BL Red** $\rightarrow$ **A-** (Signal -)
 
-![Schematic](schematic.png)
+![Schematic](images/schematic.png)
 *Figure 4. Wiring Diagram: Wheatstone Bridge to CS1238 ADC and ESP32.*
 
 ### 2.3 Electronics
@@ -62,18 +62,24 @@ The core electronics consist of a precise ADC and a dual-core microcontroller.
 | Microcontroller | ESP32 (Lolin32 Lite) |
 | Communication | USB Serial (JSON) |
 
+**Data Format:**
+The ESP32 sends a clean JSON stream containing only the raw weight value. Timestamping is handled by the PC to ensure consistency.
+```json
+{"w": 123456}
+```
+
 <div style="display: flex; gap: 10px;">
   <div style="flex: 1; text-align: center;">
-    <img src="cs1238.png" alt="CS1238" height="200" />
+    <img src="images/cs1238.png" alt="CS1238" height="200" />
     <p><em>Fig 5. CS1238 ADC Module</em></p>
   </div>
   <div style="flex: 1; text-align: center;">
-    <img src="esp32.png" alt="ESP32" height="200" />
+    <img src="images/esp32.png" alt="ESP32" height="200" />
     <p><em>Fig 6. ESP32 Microcontroller</em></p>
   </div>
 </div>
 
-![Electronics Closeup](closeup.jpg)
+![Electronics Closeup](images/closeup.jpg)
 *Figure 7. Assembled electronics with LiPo battery.*
 
 ---
@@ -81,7 +87,7 @@ The core electronics consist of a precise ADC and a dual-core microcontroller.
 ## 3. Software Architecture
 
 The software is divided into two parts:
-1.  **Firmware (`esp32_fsr_send`)**: Minimal latency, handles hardware timing and raw data extraction.
+1.  **Firmware (`platform_send.ino`)**: Minimal ESP32 code. Streams raw ADC data and handles bare-metal timing.
 2.  **Desktop App (`python_app`)**: Heavy lifting, physics integration, UI, and data storage.
 
 ### 3.1 Python Application Structure
@@ -113,36 +119,39 @@ The system uses the **Impulse-Momentum Method** to calculate jump metrics from F
 *   **Drift Compensation:** Sensor zero-point is automatically tracked during IDLE states.
 *   **Noise Clamping:** Negative sensor noise during deep unweighting is clamped to prevent "Positive Power" artifacts (since Force < 0 is physically impossible on a platform).
 
-![App Screenshot](example.png)
+![App Screenshot](images/example.png)
 *Figure 8. Desktop Application Interface showing Force, Velocity, and Power curves.*
 
 ## 4. Usage
 
-### Installation
-1.  Connect the ESP32 to the PC via USB.
-2.  Install Python dependencies:
+### 4.1. Firmware Flashing (ESP32)
+1.  Install **Arduino IDE**.
+2.  Install the **ESP32 Board Manager** (by Espressif).
+3.  Open `ESP32/platform_send/platform_send.ino`.
+4.  Select your board (e.g., *WEMOS LOLIN32 Lite*) and Port.
+5.  Click **Upload**.
+
+### 4.2. Python Application
+1.  Install Python 3.10 or newer.
+2.  Install dependencies:
     ```bash
     pip install -r python_app/requirements.txt
     ```
-
-### Running the App
-Execute the main script from the project root:
-```bash
-python python_app/main.py
-```
+3.  Run the application:
+    ```bash
+    python python_app/main.py
+    ```
 
 ### Operation
-1.  **Connect:** Click "Connect" to open the serial port.
-2.  **Tare:** Ensure the platform is empty and wait for auto-tare (or click Tare).
+1.  **Auto-Connect:** The app automatically connects to the ESP32 (defaulting to COM9, or first available).
+2.  **Tare:** Ensure the platform is empty. The system auto-tares on startup. You can trigger a re-tare via the UI.
 3.  **Measurement:**
-    - Stand still on the platform ("WEIGHING").
+    - Stand still ("WEIGHING").
     - Wait for "READY" state (Green).
     - Perform a jump.
-    - The system automatically detects phases: Unweighting $\rightarrow$ Propulsion $\rightarrow$ Flight $\rightarrow$ Landing.
-4.  **Analysis:** The jump result is displayed immediately, showing Height, Peak Power, Flight Time, and full high-resolution graphs.
+4.  **Analysis:** View Height, Power, Velocity, and Phase timings (Unweighting, Braking, Propulsion) with full graph visualization.
 
 ## 5. Future Development
 - **Bluetooth (BLE):** The firmware supports keeping the ESP32 entirely wireless.
 - **Metal Enclosure:** migrating from OSB to a metal frame for better rigidity.
-- **Industrial grade load cells:** migrating from cheap 50kg load cells to industrial grade load cells.
 - **Cloud Sync:** Uploading jump data to a web dashboard.

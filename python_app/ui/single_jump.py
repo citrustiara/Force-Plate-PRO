@@ -1,7 +1,7 @@
 import dearpygui.dearpygui as dpg
 import numpy as np
 from .base import ModeController
-from .callbacks import show_menu, connect_callback, reset_view_callback
+from .callbacks import show_menu, reset_connection_callback, reset_platform_callback, reset_view_callback
 
 class SingleJumpController(ModeController):
     def setup_ui(self):
@@ -13,13 +13,16 @@ class SingleJumpController(ModeController):
                 dpg.add_text("Single Jump Mode", color=(0, 255, 255))
                 dpg.add_text("|")
                 
-                # Buttons first (fixed position)
-                dpg.add_button(label="Connect", tag="btn_connect_s", callback=connect_callback, width=100)
-                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
+                # Connection status circle
+                with dpg.drawlist(width=16, height=16):
+                    dpg.draw_circle((8, 8), 6, fill=(200, 0, 0, 255), tag="connection_circle_s")
+                
                 dpg.add_spacer(width=10)
                 
-                # Variable width text follows
-                dpg.add_text("Disconnected", tag="txt_status_s", color=(255, 0, 0))
+                # Buttons
+                dpg.add_button(label="Reset Connection", tag="btn_reset_conn_s", callback=reset_connection_callback, width=120)
+                dpg.add_button(label="Reset Platform", tag="btn_reset_plat_s", callback=reset_platform_callback, width=110)
+                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
                 
                 dpg.add_spacer(width=150)
                 dpg.add_text("State:", color=(150, 150, 150))
@@ -86,10 +89,6 @@ class SingleJumpController(ModeController):
                 with dpg.group():
                     dpg.add_text("PROPULSION", color=(100, 255, 100))
                     dpg.add_text("-- ms", tag="met_s_phase_propulsion", color=(100, 255, 100))
-                dpg.add_spacer(width=30)
-                with dpg.group():
-                    dpg.add_text("SQUAT EST.", color=(255, 200, 100))
-                    dpg.add_text("-- kg", tag="met_s_squat_est", color=(255, 200, 100))
             
             dpg.add_separator()
             
@@ -166,7 +165,7 @@ class SingleJumpController(ModeController):
              
              dpg.set_value("met_s_mass", f"{mass:.1f} kg" if mass else "--")
              
-             # Phase times
+             # Phase times - check phase_times dict first (live), then DB fields (loaded history)
              phase_times = selected_jump.get('phase_times')
              if phase_times:
                  t_start = phase_times.get('unweighting_start', 0)
@@ -183,13 +182,14 @@ class SingleJumpController(ModeController):
                  dpg.set_value("met_s_phase_braking", f"{braking_time:.0f} ms" if braking_time > 0 else "--")
                  dpg.set_value("met_s_phase_propulsion", f"{propulsion_time:.0f} ms" if propulsion_time > 0 else "--")
              else:
-                 dpg.set_value("met_s_phase_unweight", "--")
-                 dpg.set_value("met_s_phase_braking", "--")
-                 dpg.set_value("met_s_phase_propulsion", "--")
-             
-             # Squat estimation
-             squat_est = selected_jump.get('squat_estimation', 0)
-             dpg.set_value("met_s_squat_est", f"{squat_est:.1f} kg" if squat_est > 0 else "--")
+                 # Fallback to DB fields for loaded history
+                 unweight_time = selected_jump.get('unweighting_duration')
+                 braking_time = selected_jump.get('braking_duration')
+                 propulsion_time = selected_jump.get('propulsion_duration')
+                 
+                 dpg.set_value("met_s_phase_unweight", f"{unweight_time:.0f} ms" if unweight_time else "--")
+                 dpg.set_value("met_s_phase_braking", f"{braking_time:.0f} ms" if braking_time else "--")
+                 dpg.set_value("met_s_phase_propulsion", f"{propulsion_time:.0f} ms" if propulsion_time else "--")
         else:
              # Clear metrics
              dpg.set_value("met_s_height", "--")
@@ -207,7 +207,6 @@ class SingleJumpController(ModeController):
              dpg.set_value("met_s_phase_unweight", "--")
              dpg.set_value("met_s_phase_braking", "--")
              dpg.set_value("met_s_phase_propulsion", "--")
-             dpg.set_value("met_s_squat_est", "--")
 
 def create_single_jump_header():
     """Backwards compatibility wrapper to create UI"""

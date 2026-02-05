@@ -1,6 +1,6 @@
 import dearpygui.dearpygui as dpg
 from .base import ModeController
-from .callbacks import show_menu, connect_callback, reset_view_callback, manual_mass_callback, manual_start_vel_callback
+from .callbacks import show_menu, reset_connection_callback, reset_platform_callback, reset_view_callback, manual_mass_callback, manual_start_vel_callback
 
 class JumpEstimationController(ModeController):
     def setup_ui(self):
@@ -11,12 +11,16 @@ class JumpEstimationController(ModeController):
                 dpg.add_text("Jump Estimation Mode", color=(0, 255, 255))
                 dpg.add_text("|")
                 
-                # Buttons first
-                dpg.add_button(label="Connect", tag="btn_connect_e", callback=connect_callback, width=100)
-                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
+                # Connection status circle
+                with dpg.drawlist(width=16, height=16):
+                    dpg.draw_circle((8, 8), 6, fill=(200, 0, 0, 255), tag="connection_circle_e")
+                
                 dpg.add_spacer(width=10)
                 
-                dpg.add_text("Disconnected", tag="txt_status_e", color=(255, 0, 0))
+                # Buttons
+                dpg.add_button(label="Reset Connection", tag="btn_reset_conn_e", callback=reset_connection_callback, width=120)
+                dpg.add_button(label="Reset Platform", tag="btn_reset_plat_e", callback=reset_platform_callback, width=110)
+                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
                 
                 dpg.add_spacer(width=50)
                 # Controls specific to Estimation

@@ -29,7 +29,14 @@ class DatabaseHandler:
             contact_time REAL,
             contact_start_time REAL,
             contact_end_time REAL,
-            curve_start_time REAL
+            curve_start_time REAL,
+            unweighting_duration REAL,
+            braking_duration REAL,
+            propulsion_duration REAL,
+            time_unweighting_start REAL,
+            time_braking_start REAL,
+            time_propulsion_start REAL,
+            time_takeoff REAL
         )''')
         
         c.execute('''CREATE TABLE IF NOT EXISTS settings (
@@ -66,6 +73,34 @@ class DatabaseHandler:
             c.execute("ALTER TABLE jumps ADD COLUMN curve_start_time REAL")
         except sqlite3.OperationalError:
             pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN unweighting_duration REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN braking_duration REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN propulsion_duration REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN time_unweighting_start REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN time_braking_start REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN time_propulsion_start REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN time_takeoff REAL")
+        except sqlite3.OperationalError:
+            pass
             
         self.conn.commit()
 
@@ -89,7 +124,14 @@ class DatabaseHandler:
             jump_data.get("contact_time"),
             jump_data.get("contact_start_time"),
             jump_data.get("contact_end_time"),
-            jump_data.get("curve_start_time")
+            jump_data.get("curve_start_time"),
+            jump_data.get("unweighting_duration"),
+            jump_data.get("braking_duration"),
+            jump_data.get("propulsion_duration"),
+            jump_data.get("time_unweighting_start"),
+            jump_data.get("time_braking_start"),
+            jump_data.get("time_propulsion_start"),
+            jump_data.get("time_takeoff")
         )
         
         c = self.conn.cursor()
@@ -97,8 +139,10 @@ class DatabaseHandler:
                   (timestamp, height_flight, height_impulse, peak_power, avg_power, 
                    flight_time, jumper_weight, velocity_takeoff, max_force, force_curve,
                    formula_peak_power, formula_avg_power, velocity_flight, contact_time,
-                   contact_start_time, contact_end_time, curve_start_time)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
+                   contact_start_time, contact_end_time, curve_start_time,
+                   unweighting_duration, braking_duration, propulsion_duration,
+                   time_unweighting_start, time_braking_start, time_propulsion_start, time_takeoff)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
         self.conn.commit()
         return c.lastrowid
 
@@ -135,7 +179,14 @@ class DatabaseHandler:
                 "contact_time": get_val("contact_time"),
                 "contact_start_time": get_val("contact_start_time"),
                 "contact_end_time": get_val("contact_end_time"),
-                "curve_start_time": get_val("curve_start_time")
+                "curve_start_time": get_val("curve_start_time"),
+                "unweighting_duration": get_val("unweighting_duration"),
+                "braking_duration": get_val("braking_duration"),
+                "propulsion_duration": get_val("propulsion_duration"),
+                "time_unweighting_start": get_val("time_unweighting_start"),
+                "time_braking_start": get_val("time_braking_start"),
+                "time_propulsion_start": get_val("time_propulsion_start"),
+                "time_takeoff": get_val("time_takeoff")
             }
             
             # Remove None values to avoid 'contact_time' in j being true for None

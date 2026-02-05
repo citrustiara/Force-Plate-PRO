@@ -1,6 +1,6 @@
 import dearpygui.dearpygui as dpg
 from .base import ModeController
-from .callbacks import show_menu, connect_callback, reset_view_callback
+from .callbacks import show_menu, reset_connection_callback, reset_platform_callback, reset_view_callback
 
 class ContactTimeController(ModeController):
     def setup_ui(self):
@@ -11,12 +11,17 @@ class ContactTimeController(ModeController):
                 dpg.add_spacer(width=20)
                 dpg.add_text("Contact Time Mode", color=(0, 255, 255))
                 dpg.add_text("|")
-                # Buttons first
-                dpg.add_button(label="Connect", tag="btn_connect_c", callback=connect_callback, width=100)
-                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
+                
+                # Connection status circle
+                with dpg.drawlist(width=16, height=16):
+                    dpg.draw_circle((8, 8), 6, fill=(200, 0, 0, 255), tag="connection_circle_c")
+                
                 dpg.add_spacer(width=10)
                 
-                dpg.add_text("Disconnected", tag="txt_status_c", color=(255, 0, 0))
+                # Buttons
+                dpg.add_button(label="Reset Connection", tag="btn_reset_conn_c", callback=reset_connection_callback, width=120)
+                dpg.add_button(label="Reset Platform", tag="btn_reset_plat_c", callback=reset_platform_callback, width=110)
+                dpg.add_button(label="Reset View", callback=reset_view_callback, width=100)
 
             dpg.add_separator()
             with dpg.group():

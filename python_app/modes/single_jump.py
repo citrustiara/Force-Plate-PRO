@@ -164,15 +164,31 @@ class SingleJumpMode(PhysicsMode):
             "avg_power_start_time": d["avg_power_start_time"],
             # Phase timing data
             "phase_times": d.get("phase_times"),
-            "curve_start_time": d["graph_start_time_y"] - 600,
-            # Squat estimation
-            "squat_estimation": d.get("squat_estimation", 0)
+            "curve_start_time": d["graph_start_time_y"] - 600
         }
+        
+        # Calculate phase durations from timestamps for DB persistence
+        pt = d.get("phase_times")
+        if pt:
+            t_start = pt.get('unweighting_start', 0)
+            t_min_vel = pt.get('min_velocity_time', 0)
+            t_zero = pt.get('zero_crossing_time', 0)
+            t_takeoff = pt.get('takeoff_time', 0)
+            
+            result["unweighting_duration"] = (t_min_vel - t_start) if (t_start > 0 and t_min_vel > 0) else None
+            result["braking_duration"] = (t_zero - t_min_vel) if (t_min_vel > 0 and t_zero > 0) else None
+            result["propulsion_duration"] = (t_takeoff - t_zero) if (t_zero > 0 and t_takeoff > 0) else None
+            
+            # Save timestamps for graph drawing persistence
+            result["time_unweighting_start"] = t_start if t_start > 0 else None
+            result["time_braking_start"] = t_min_vel if t_min_vel > 0 else None
+            result["time_propulsion_start"] = t_zero if t_zero > 0 else None
+            result["time_takeoff"] = t_takeoff if t_takeoff > 0 else None
         
         self.pending_result_data = None
         return result
 
-    def process_sample(self, raw, timestamp, micros, now, dt):
+    def process_sample(self, raw, now, dt):
         """
         Main sample processing - handles state machine and physics integration.
         Returns dict with current state, weight, and optional result.
@@ -265,12 +281,6 @@ class SingleJumpMode(PhysicsMode):
         # Height from impulse-momentum
         height_impulse = (self.last_takeoff_velocity**2) / (2 * gravity) * 100.0
         
-        # Squat estimation: avg propulsion force - bodyweight - 5kg
-        avg_propulsion_force = 0.0
-        if self.propulsion_force_count > 0:
-            avg_propulsion_force = self.propulsion_force_sum / self.propulsion_force_count
-        squat_estimation = max(0, (avg_propulsion_force - self.jumper_mass_kg)*1.25)
-        
         # Store result for delayed emission (to capture landing graph)
         self.pending_result_data = {
             "timestamp": self.landing_time,
@@ -288,8 +298,7 @@ class SingleJumpMode(PhysicsMode):
             "avg_power_start_time": self.integration_start_time,
             "graph_start_velocity": self.phase_start_velocity,
             "graph_start_time_y": self.jump_start_y,
-            "phase_times": self.saved_phase_times,  # Phase timing data
-            "squat_estimation": squat_estimation  # Estimated squat max
+            "phase_times": self.saved_phase_times  # Phase timing data
         }
         self.result_emit_time = now + 600  # 600ms delay to capture landing
         
@@ -408,17 +417,13 @@ class SingleJumpMode(PhysicsMode):
         This is the true start of the unweighting phase.
         """
         engine = self.engine
-        gravity = engine.config["gravity"]
         
         # Look back up to 200 samples (~150ms)
         lookback_count = 200
         start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
         
-        # Integrate forward from lookback, tracking velocity and timestamps
-        v = 0.0
-        last_u = engine.buffer[start_index][2]
-        if last_u == 0:
-            last_u = engine.buffer[start_index][0] * 1000
+        # Fixed dt from frequency
+        iter_dt = 1.0 / engine.config["frequency"]
         
         last_zero_time = engine.buffer[start_index][0]  # Default to start
         
@@ -432,16 +437,6 @@ class SingleJumpMode(PhysicsMode):
                 if steps > lookback_count:
                     break
                 continue
-            
-            # Calculate dt
-            iter_dt = 1.0 / engine.config["frequency"]
-            if b[2] > 0 and last_u > 0:
-                d = b[2] - last_u
-                if d < 0:
-                    d += 4294967295
-                if 0 < d < 100000:
-                    iter_dt = d / 1000000.0
-            last_u = b[2]
             
             # Check if force is close to bodyweight (net force ~= 0)
             # This indicates the neutral position before unweighting started
@@ -562,10 +557,8 @@ class SingleJumpMode(PhysicsMode):
         self.power_sample_count = 0
         self.max_propulsion_force = 0
         
-        # Forward integrate from lookback point
-        last_buf_micros = engine.buffer[start_index][2]
-        if last_buf_micros == 0:
-            last_buf_micros = engine.buffer[start_index][0] * 1000
+        # Fixed dt from frequency
+        iter_dt = 1.0 / engine.config["frequency"]
             
         steps = 0
         i = start_index
@@ -579,16 +572,6 @@ class SingleJumpMode(PhysicsMode):
                 if steps > lookback_count:
                     break
                 continue
-
-            # Calculate dt from micros timestamps
-            iter_dt = 1.0 / engine.config["frequency"]
-            if b[2] > 0 and last_buf_micros > 0:
-                d = b[2] - last_buf_micros
-                if d < 0:
-                    d += 4294967295  # Handle micros overflow
-                if 0 < d < 100000:
-                    iter_dt = d / 1000000.0
-            last_buf_micros = b[2]
             
             # Integrate this sample
             force_kg = b[1]

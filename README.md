@@ -118,7 +118,7 @@ The system uses the **Impulse-Momentum Method** to calculate jump metrics from F
 *   **Retroactive Pulse Integration:** The system buffers data continuously. When movement is detected, it "rewinds" integration by ~75ms to capture the critical initial start of the movement that occurred before the trigger threshold was crossed.
 *   **Automatic Phase Detection:** Robustly identifies jump phases by analyzing velocity crossings. It strictly distinguishes between *Unweighting* and *Flight* based on velocity and time of the low weight period.
 *   **Dynamic Stability Check:** During weighing, the system calculates running stats (mean/variance) on 300ms windows to ensure the user is perfectly still before locking in bodyweight.
-*   **Drift Compensation:** Smart auto-tare logic monitors the platform during IDLE states. If determining that the platform is empty but the weight has drifted (>0.2kg) after 10 seconds of inactivity, it automatically re-zeros the sensors.
+*   **Drift Compensation:** Smart auto-tare logic monitors the platform during IDLE states. If determining that the platform is empty but the weight has drifted (>0.2kg) after 1 second of inactivity, it automatically re-zeros the sensors.
 *   **Impulse-Momentum Method:** Calculates jump height by integrating acceleration to find Takeoff Velocity ($v_{takeoff}^2 / 2g$).
 *   **Flight Time Method:** Independently calculates height from air time, allowing for comparison between methods ($g \cdot t_{flight}^2 / 8$).
 *   **Continuous Jump Physics:** For rebound jumps, the impact velocity is derived directly from the previous jump's **Flight Time**, ensuring extremely accurate momentum conservation for the next takeoff.

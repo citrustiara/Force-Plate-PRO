@@ -1,25 +1,61 @@
-# Force Plate PRO - Python Application
+# Force Plate PRO - Python Desktop App
 
-The Python application is the brain of the Force Plate PRO system. It handles:
-- Serial communication with the ESP32.
-- High-frequency data processing (circular buffering, filtering).
-- Physics integration (Impulse-Momentum method).
-- Real-time visualization using DearPyGui.
-- Data storage (SQLite).
+The desktop companion application for the Force Plate PRO system. Built with Python 3.10 and **Dear PyGui**, it handles high-frequency data acquisition, complex physics modeling, and real-time visualization of ground reaction forces.
 
-## Requirements
-- Python 3.10+
-- Dependencies listed in `requirements.txt`
+## Key Features
+
+*   **Real-Time Visualization:** Smooth layout of Force, Velocity, and Power graphs rendering at 60 FPS while processing 1280 Hz sensor data.
+*   **Physics Engine:** Implements **Impulse-Momentum** and **Flight Time** methods for jump height calculation.
+    *   *Retroactive Integration:* Buffers data to capture the critical "start of movement" moments before trigger thresholds.
+    *   *Drift Compensation:* Automatically re-zeros the platform if weight drift is detected during inactivity.
+    *   *Bounce Protection:* Filters out mechanical vibrations after takeoff.
+*   **Exercise Modes:**
+    *   **Countermovement Jump (CMJ):** Full phase analysis (Unweighting, Braking, Propulsion, Flight, Landing).
+    *   **Contact Time:** optimized for measuring quick rebound jumps.
+    *   **Isometric Tests:** (In development) For measuring peak force without movement.
+*   **Data Persistence:** Automatic saving of jump history and raw data to `jumps_data.db` (SQLite).
+*   **Hardware Integration:** Auto-connects to ESP32 via USB Serial (defaults to 921600 baud).
 
 ## Installation
-```bash
-pip install -r requirements.txt
-```
 
-## Usage
-Run the main script:
-```bash
-python main.py
-```
+1.  **Prerequisites:**
+    *   Python 3.10 or newer.
+    *   Drivers for your ESP32's USB-UART bridge (CP210x or CH340).
 
-*Detailed documentation and explanation of physics algorithms will be added here.*
+2.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Run the Application:**
+    ```bash
+    python main.py
+    ```
+
+## Project Structure
+
+*   **`main.py`**: Application entry point. Initializes the UI loop, Database, and Serial Handler.
+*   **`physics.py`**: The core Physics Engine. Handles:
+    *   Circular buffering of raw samples.
+    *   Trapezoidal integration for Velocity and Power.
+    *   State machine logic for lift-off and landing detection.
+*   **`serial_handler.py`**: Manages the threaded serial connection to the ESP32. Parses incoming JSON data streams.
+*   **`database.py`**: Handling SQLite `jumps_data.db` for storing results and application settings (like calibration factors).
+*   **`ui/`**: User Interface modules using Dear PyGui.
+    *   **`plot_manager.py`**: Optimizes plotting performance by downsampling data for display without losing measurement precision.
+*   **`modes/`**: Specific logic for different exercise types (Single Jump, Repeat Jumps, etc.).
+
+## Usage Guide
+
+1.  **Connect:** Plug in the ESP32. The app usually auto-connects. If not, check the "Connection" status in the top bar.
+2.  **Calibrate (Tare):** Ensure the plate is empty. The system tares automatically on startup, but you can force a re-tare if needed.
+3.  **Jump:**
+    *   Stand still on the plate ("WEIGHING").
+    *   Wait for the "READY" signal.
+    *   Perform your jump.
+4.  **Analyze:** Click on any jump in the history sidebar to view its specific Force/Velocity/Power curves.
+
+## Troubleshooting
+
+*   **"Not Connecting":** Check if the COM port is being used by another app (like Arduino Serial Monitor). Close other apps and restart.
+*   **"Drifting Weight/inaccurate weight":** Tare and calibrate to ensure the best results, worst case scenario reset connection and device using dedicated buttons.

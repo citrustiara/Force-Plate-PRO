@@ -249,7 +249,7 @@ class SingleJumpMode(PhysicsMode):
             # if idle for > ~10s and weight has drifted, auto-tare
             if self.idle_start_time == 0:
                 self.idle_start_time = now
-            elif now - self.idle_start_time > 10000:
+            elif now - self.idle_start_time > 1000:
                 avg_val = self.engine.get_buffer_average(150)
                 current_kg = avg_val
                 

@@ -47,7 +47,7 @@ The sensors are paired (Top-Left, Top-Right, Bottom-Left, Bottom-Right).
     - **BL Red** $\rightarrow$ **A-** (Signal -)
 
 ![Schematic](images/schematic.png)
-*Figure 4. Wiring Diagram: Wheatstone Bridge to CS1238 ADC and ESP32.*
+*Figure 4. Wiring Diagram: Wheatstone Bridge to CS1238 ADC and ESP32 (sorry about the mermaid diagram😥).*
 
 ### 2.3 Electronics
 The core electronics consist of a precise ADC and a dual-core microcontroller.

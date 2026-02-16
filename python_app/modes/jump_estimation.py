@@ -116,7 +116,7 @@ class JumpEstimationMode(PhysicsMode):
                  if now - self.integration_start_time > 5000:
                     self.state = "READY"
                  
-                 force_n = (raw / raw_per_kg) * gravity
+                 force_n = display_kg * gravity
                  net_kg = display_kg - self.manual_mass_kg
                  net_force_n = net_kg * gravity
                  

@@ -438,9 +438,6 @@ class SingleJumpMode(PhysicsMode):
         lookback_count = 200
         start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
         
-        # Fixed dt from frequency
-        iter_dt = 1.0 / engine.config["frequency"]
-        
         last_zero_time = engine.buffer[start_index][0]  # Default to start
         
         steps = 0

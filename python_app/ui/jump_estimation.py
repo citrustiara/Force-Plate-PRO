@@ -39,15 +39,15 @@ class JumpEstimationController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("HEIGHT (Impulse)", color=(150, 150, 150))
-                        dpg.add_text("-- cm", tag="met_e_height_imp", color=(0, 200, 200))
+                        dpg.add_text("-- cm", tag="met_e_height_imp", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("FLIGHT TIME (Calc)", color=(150, 150, 150))
-                        dpg.add_text("-- ms", tag="met_e_flight", color=(100, 100, 255))
+                        dpg.add_text("-- ms", tag="met_e_flight", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("MASS", color=(150, 150, 150))
-                        dpg.add_text("-- kg", tag="met_e_mass", color=(255, 255, 0))
+                        dpg.add_text("-- kg", tag="met_e_mass", color=(255, 255, 255))
 
                 dpg.add_spacer(height=5)
                 
@@ -55,11 +55,11 @@ class JumpEstimationController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("PEAK POWER", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_e_peak_pwr", color=(255, 165, 0))
+                        dpg.add_text("-- W", tag="met_e_peak_pwr", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("MEAN POWER", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_e_mean_pwr", color=(255, 200, 0))
+                        dpg.add_text("-- W", tag="met_e_mean_pwr", color=(255, 255, 255))
                 
                 dpg.add_spacer(height=5)
                 
@@ -67,11 +67,11 @@ class JumpEstimationController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("PEAK FORCE", color=(150, 150, 150))
-                        dpg.add_text("-- kg", tag="met_e_peak_force", color=(255, 50, 50))
+                        dpg.add_text("-- kg", tag="met_e_peak_force", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("VEL (Takeoff)", color=(150, 150, 150))
-                        dpg.add_text("-- m/s", tag="met_e_vel", color=(100, 255, 100))
+                        dpg.add_text("-- m/s", tag="met_e_vel", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("STATE", color=(150, 150, 150))

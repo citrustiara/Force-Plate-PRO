@@ -36,23 +36,23 @@ class SingleJumpController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("HEIGHT (Flight)", color=(150, 150, 150))
-                        dpg.add_text("-- cm", tag="met_s_height", color=(0, 255, 255))
+                        dpg.add_text("-- cm", tag="met_s_height", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("FLIGHT TIME", color=(150, 150, 150))
-                        dpg.add_text("-- ms", tag="met_s_flight", color=(100, 100, 255))
+                        dpg.add_text("-- ms", tag="met_s_flight", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("PEAK POWER (Phys)", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_s_peak_pwr", color=(255, 165, 0))
+                        dpg.add_text("-- W", tag="met_s_peak_pwr", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("MEAN POWER (Phys)", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_s_mean_pwr", color=(255, 200, 0))
+                        dpg.add_text("-- W", tag="met_s_mean_pwr", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("MASS", color=(150, 150, 150))
-                        dpg.add_text("-- kg", tag="met_s_mass", color=(255, 255, 0))
+                        dpg.add_text("-- kg", tag="met_s_mass", color=(255, 255, 255))
 
                 dpg.add_spacer(height=5)
                 
@@ -60,35 +60,35 @@ class SingleJumpController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("PEAK FORCE (kg)", color=(150, 150, 150))
-                        dpg.add_text("-- kg", tag="met_s_peak_force", color=(255, 50, 50))
+                        dpg.add_text("-- kg", tag="met_s_peak_force", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("PEAK FORCE (N)", color=(150, 150, 150))
-                        dpg.add_text("-- N", tag="met_s_peak_force_n", color=(255, 80, 80))
+                        dpg.add_text("-- N", tag="met_s_peak_force_n", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("PEAK POWER (W/kg)", color=(150, 150, 150))
-                        dpg.add_text("-- W/kg", tag="met_s_peak_pwr_w_kg", color=(255, 165, 50))
+                        dpg.add_text("-- W/kg", tag="met_s_peak_pwr_w_kg", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("VEL (Flight-Calc)", color=(150, 150, 150))
-                        dpg.add_text("-- m/s", tag="met_s_vel_flight", color=(50, 200, 50))
+                        dpg.add_text("-- m/s", tag="met_s_vel_flight", color=(255, 255, 255))
             
             dpg.add_separator()
             
             # --- PHASE TIMING METRICS ---
             with dpg.group(horizontal=True):
                 with dpg.group():
-                    dpg.add_text("UNWEIGHTING", color=(255, 100, 100))
-                    dpg.add_text("-- ms", tag="met_s_phase_unweight", color=(255, 100, 100))
+                    dpg.add_text("UNWEIGHTING", color=(150, 150, 150))
+                    dpg.add_text("-- ms", tag="met_s_phase_unweight", color=(255, 255, 255))
                 dpg.add_spacer(width=20)
                 with dpg.group():
-                    dpg.add_text("BRAKING", color=(100, 100, 255))
-                    dpg.add_text("-- ms", tag="met_s_phase_braking", color=(100, 100, 255))
+                    dpg.add_text("BRAKING", color=(150, 150, 150))
+                    dpg.add_text("-- ms", tag="met_s_phase_braking", color=(255, 255, 255))
                 dpg.add_spacer(width=20)
                 with dpg.group():
-                    dpg.add_text("PROPULSION", color=(100, 255, 100))
-                    dpg.add_text("-- ms", tag="met_s_phase_propulsion", color=(100, 255, 100))
+                    dpg.add_text("PROPULSION", color=(150, 150, 150))
+                    dpg.add_text("-- ms", tag="met_s_phase_propulsion", color=(255, 255, 255))
             
             dpg.add_separator()
             
@@ -97,19 +97,19 @@ class SingleJumpController(ModeController):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("HEIGHT (Impulse)", color=(150, 150, 150))
-                        dpg.add_text("-- cm", tag="met_s_height_imp", color=(0, 200, 200))
+                        dpg.add_text("-- cm", tag="met_s_height_imp", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("VEL (Takeoff-Imp)", color=(150, 150, 150))
-                        dpg.add_text("-- m/s", tag="met_s_vel", color=(100, 255, 100))
+                        dpg.add_text("-- m/s", tag="met_s_vel", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("PEAK POWER (Sayers)", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_s_peak_pwr_form", color=(255, 140, 0))
+                        dpg.add_text("-- W", tag="met_s_peak_pwr_form", color=(255, 255, 255))
                     dpg.add_spacer(width=20)
                     with dpg.group():
                         dpg.add_text("MEAN POWER (Harman)", color=(150, 150, 150))
-                        dpg.add_text("-- W", tag="met_s_mean_pwr_form", color=(255, 180, 0))
+                        dpg.add_text("-- W", tag="met_s_mean_pwr_form", color=(255, 255, 255))
 
     def on_enter(self):
         dpg.show_item("group_header_single")

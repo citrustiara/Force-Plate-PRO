@@ -1,9 +1,8 @@
 import numpy as np
 from modes import SingleJumpMode, JumpEstimationMode, ContactTimeMode
-from modes.base import AIR_THRESHOLD
+from modes.base import AIR_THRESHOLD, GRAVITY
 
 # Constants
-GRAVITY = 9.80665
 BUFFER_SIZE = 10000  # ~8s
 
 class PhysicsEngine:

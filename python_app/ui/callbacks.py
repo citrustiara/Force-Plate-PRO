@@ -28,16 +28,6 @@ def setup_callbacks(physics, serial_handler, db, jump_history_ref):
     _jump_history = jump_history_ref
 
 
-def get_state():
-    """Get current application state."""
-    global _selected_jump, _auto_fit_y, _jump_history
-    return {
-        'selected_jump': _selected_jump,
-        'auto_fit_y': _auto_fit_y,
-        'jump_history': _jump_history
-    }
-
-
 def set_selected_jump(jump):
     """Set the currently selected jump."""
     global _selected_jump
@@ -52,12 +42,6 @@ def get_selected_jump():
 def get_jump_history():
     """Get reference to jump history list."""
     return _jump_history
-
-
-def set_jump_history(history):
-    """Update jump history reference."""
-    global _jump_history
-    _jump_history = history
 
 
 def toggle_autofit(sender, app_data):
@@ -362,73 +346,37 @@ def show_menu(sender=None, app_data=None):
     dpg.show_item("group_menu")
 
 
-def show_single_jump(sender=None, app_data=None):
-    """Switch to Single Jump mode."""
-    _physics.set_mode("Single Jump")
+def _show_single_jump_type(mode_name):
+    """Shared logic for all Single Jump-type modes (Single Jump, Box Drop, Push Up, etc.)."""
+    _physics.set_mode(mode_name)
     dpg.hide_item("group_menu")
     dpg.show_item("group_workspace")
     dpg.show_item("group_header_single")
     dpg.hide_item("group_header_estimation")
     dpg.hide_item("group_header_contact_time")
     
-    # Update legend
     dpg.show_item("plot_line_series")
     dpg.show_item("plot_line_series_mass")
     dpg.show_item("plot_line_series_power")
     dpg.show_item("plot_line_series_vel")
     dpg.hide_item("plot_line_series_ct_start")
     dpg.hide_item("plot_line_series_ct_end")
+
+
+def show_single_jump(sender=None, app_data=None):
+    _show_single_jump_type("Single Jump")
 
 
 def show_box_drop(sender=None, app_data=None):
-    """Switch to Box Drop mode (using Single Jump UI for now)."""
-    _physics.set_mode("Box Drop")
-    dpg.hide_item("group_menu")
-    dpg.show_item("group_workspace")
-    dpg.show_item("group_header_single")
-    dpg.hide_item("group_header_estimation")
-    dpg.hide_item("group_header_contact_time")
-    
-    dpg.show_item("plot_line_series")
-    dpg.show_item("plot_line_series_mass")
-    dpg.show_item("plot_line_series_power")
-    dpg.show_item("plot_line_series_vel")
-    dpg.hide_item("plot_line_series_ct_start")
-    dpg.hide_item("plot_line_series_ct_end")
+    _show_single_jump_type("Box Drop")
 
 
 def show_box_drop_jump(sender=None, app_data=None):
-    """Switch to Box Drop Jump mode (using Single Jump UI for now)."""
-    _physics.set_mode("Box Drop Jump")
-    dpg.hide_item("group_menu")
-    dpg.show_item("group_workspace")
-    dpg.show_item("group_header_single")
-    dpg.hide_item("group_header_estimation")
-    dpg.hide_item("group_header_contact_time")
-    
-    dpg.show_item("plot_line_series")
-    dpg.show_item("plot_line_series_mass")
-    dpg.show_item("plot_line_series_power")
-    dpg.show_item("plot_line_series_vel")
-    dpg.hide_item("plot_line_series_ct_start")
-    dpg.hide_item("plot_line_series_ct_end")
+    _show_single_jump_type("Box Drop Jump")
 
 
 def show_push_up(sender=None, app_data=None):
-    """Switch to Push Up mode (using Single Jump UI for now)."""
-    _physics.set_mode("Push Up")
-    dpg.hide_item("group_menu")
-    dpg.show_item("group_workspace")
-    dpg.show_item("group_header_single")
-    dpg.hide_item("group_header_estimation")
-    dpg.hide_item("group_header_contact_time")
-    
-    dpg.show_item("plot_line_series")
-    dpg.show_item("plot_line_series_mass")
-    dpg.show_item("plot_line_series_power")
-    dpg.show_item("plot_line_series_vel")
-    dpg.hide_item("plot_line_series_ct_start")
-    dpg.hide_item("plot_line_series_ct_end")
+    _show_single_jump_type("Push Up")
 
 
 def show_jump_estimation(sender=None, app_data=None):
@@ -440,7 +388,6 @@ def show_jump_estimation(sender=None, app_data=None):
     dpg.show_item("group_header_estimation")
     dpg.hide_item("group_header_contact_time")
     
-    # Update legend
     dpg.show_item("plot_line_series")
     dpg.show_item("plot_line_series_mass")
     dpg.show_item("plot_line_series_power")
@@ -458,7 +405,6 @@ def show_contact_time(sender=None, app_data=None):
     dpg.hide_item("group_header_estimation")
     dpg.show_item("group_header_contact_time")
     
-    # Update legend
     dpg.show_item("plot_line_series")
     dpg.hide_item("plot_line_series_mass")
     dpg.hide_item("plot_line_series_power")
@@ -479,15 +425,4 @@ def on_new_jump(jump_result):
     _selected_jump = jump_result
 
 
-def safe_fmt(val, unit, fmt=".1f"):
-    """Format value with unit, handling None and non-numeric types."""
-    if val is None:
-        return "--"
-    try:
-        fval = float(val)
-        return f"{fval:{fmt}} {unit}"
-    except (ValueError, TypeError):
-        # If it's already a string or can't be cast to float, return as is or with unit
-        if isinstance(val, str) and val.strip() == "":
-            return "--"
-        return f"{val} {unit}"
+

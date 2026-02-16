@@ -5,7 +5,7 @@ Clean, minimal entry point that initializes the application.
 import dearpygui.dearpygui as dpg
 import time
 
-from physics import PhysicsEngine, GRAVITY
+from physics import PhysicsEngine
 from serial_handler import SerialHandler
 from database import DatabaseHandler
 

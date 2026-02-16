@@ -9,7 +9,7 @@ __all__ = [
     'SingleJumpMode', 
     'JumpEstimationMode',
     'ContactTimeMode',
-    'AIR_THRESHOLD',
+    'GRAVITY',
     'AIR_THRESHOLD',
     'MOVEMENT_THRESHOLD',
     'STABILITY_TOLERANCE_KG'

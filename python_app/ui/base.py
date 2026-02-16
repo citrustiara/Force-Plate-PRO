@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import dearpygui.dearpygui as dpg
-import numpy as np
 
 class ModeController(ABC):
     """

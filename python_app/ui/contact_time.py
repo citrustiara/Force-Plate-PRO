@@ -43,7 +43,7 @@ class ContactTimeController(ModeController):
                     
                     with dpg.child_window(width=160, height=60, border=True):
                         dpg.add_text("Max Force", color=(200, 200, 200))
-                        dpg.add_text("-- kg", tag="met_c_max_force", color=(255, 100, 100), bullet=False)
+                        dpg.add_text("-- kg", tag="met_c_max_force", color=(255, 255, 255), bullet=False)
 
     def on_enter(self):
         dpg.show_item("group_header_contact_time")

@@ -52,8 +52,10 @@ class ContactTimeMode(PhysicsMode):
         elif self.state == "IN_AIR_1":
             # first jump
             self.in_air_duration = now - self.in_air_start_time
-            if self.in_air_duration > MAX_AIR_TIME:
+
+            if self.in_air_duration > MAX_AIR_TIME: #reset if in air too long
                 self.reset_state()
+
             if weight > AIR_THRESHOLD:
                 self.state = "CONTACT"
                 self.contact_start_time = now
@@ -62,12 +64,15 @@ class ContactTimeMode(PhysicsMode):
             # kontakt i liczenie
             if weight > (self.max_force * engine.config["raw_per_kg"]):
                  self.max_force = display_kg
-                 
+
+            if now - self.contact_start_time > 1000: #reset if contact too long
+                self.reset_state()
+
             if weight < AIR_THRESHOLD:
                 self.in_air_start_time = now
                 self.contact_end_time = now
                 self.state = "IN_AIR_2"
-                #TODO!!!!!! zmienic z 
+
                 # Calculate result
                 self.contact_duration = self.contact_end_time - self.contact_start_time
                 
@@ -80,7 +85,6 @@ class ContactTimeMode(PhysicsMode):
             if weight > AIR_THRESHOLD:
                 self.state = "RESULT"
                 curve_start = self.contact_start_time - 500
-                # puste p i vel bo to chujstwo nie zadziala ianczwej bo to metoda engine
                 curve = engine.generate_power_curve(curve_start, now, 70.0)
                 for p in curve:
                     p['p'] = None

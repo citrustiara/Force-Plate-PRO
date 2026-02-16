@@ -85,6 +85,9 @@ class JumpEstimationController(ModeController):
         dpg.show_item("plot_line_series_vel")
         dpg.hide_item("plot_line_series_ct_start")
         dpg.hide_item("plot_line_series_ct_end")
+        dpg.hide_item("plot_line_phase_unweight")
+        dpg.hide_item("plot_line_phase_braking")
+        dpg.hide_item("plot_line_phase_propulsion")
 
     def on_exit(self):
         dpg.hide_item("group_header_estimation")

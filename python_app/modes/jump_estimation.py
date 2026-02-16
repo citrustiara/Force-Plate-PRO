@@ -159,48 +159,21 @@ class JumpEstimationMode(PhysicsMode):
         }
         
     def _retroactive_propulsion_fix(self, now):
-        """Re-calcs velocity from buffer start based on movement threshold"""
+        """
+        Rewind integration to ~77ms before trigger detection.
+        This captures the full propulsion phase that started before we detected movement.
+        """
         engine = self.engine
         gravity = engine.config["gravity"]
         
-        curr_idx = engine.buf_idx - 1
-        if curr_idx < 0:
-            curr_idx = engine.BUFFER_SIZE - 1
+        lookback_count = 100  # ~77ms at 1300Hz
+        start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
         
-        best_start_index = curr_idx
-        min_diff = 9999.0
+        start_pt = engine.buffer[start_index]
+        self.integration_start_time = start_pt[0]
+        self.jump_start_y = start_pt[0]
         
-        scan_count = 0
-        limit = min(engine.buffer.shape[0], 600)
-        
-        while scan_count < limit:
-            scan_idx = (engine.buf_idx - 1 - scan_count) % engine.BUFFER_SIZE
-            pt = engine.buffer[scan_idx]
-            
-            if now - pt[0] > 600:
-                break
-            
-            diff_kg = abs(pt[1] - self.manual_mass_kg)
-            
-            if diff_kg < 2.0: 
-                best_start_index = scan_idx
-                break
-            
-            if diff_kg < min_diff:
-                min_diff = diff_kg
-                best_start_index = scan_idx
-
-            scan_count += 1
-
-        # Use the best point found
-        start_index = best_start_index
-        
-        # Update official start times
-        if start_index != curr_idx:
-             start_pt = engine.buffer[start_index]
-             self.integration_start_time = start_pt[0]
-             self.jump_start_y = start_pt[0]
-            
+        # Reset accumulators
         self.current_velocity = 0
         self.peak_power = 0
         self.sum_power = 0
@@ -209,12 +182,21 @@ class JumpEstimationMode(PhysicsMode):
         
         # Fixed dt from frequency
         iter_dt = 1.0 / engine.config["frequency"]
-            
+        
         steps = 0
         i = start_index
         while i != engine.buf_idx:
             b = engine.buffer[i]
             
+            # Skip invalid buffer entries
+            if b[0] == 0:
+                i = (i + 1) % engine.BUFFER_SIZE
+                steps += 1
+                if steps > lookback_count:
+                    break
+                continue
+            
+            # Integrate this sample
             force_kg = b[1]
             net_kg = force_kg - self.manual_mass_kg
             net_force_n = net_kg * gravity
@@ -233,11 +215,8 @@ class JumpEstimationMode(PhysicsMode):
                 self.max_propulsion_force = force_n
             if instant_power > self.peak_power:
                 self.peak_power = instant_power
-                
+            
             i = (i + 1) % engine.BUFFER_SIZE
             steps += 1
-            if steps > engine.BUFFER_SIZE:
+            if steps >= lookback_count:
                 break
-            
-        self.integration_start_time = engine.buffer[start_index][0]
-        self.jump_start_y = self.integration_start_time

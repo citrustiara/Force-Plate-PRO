@@ -361,6 +361,9 @@ def _show_single_jump_type(mode_name):
     dpg.show_item("plot_line_series_vel")
     dpg.hide_item("plot_line_series_ct_start")
     dpg.hide_item("plot_line_series_ct_end")
+    dpg.show_item("plot_line_phase_unweight")
+    dpg.show_item("plot_line_phase_braking")
+    dpg.show_item("plot_line_phase_propulsion")
 
 
 def show_single_jump(sender=None, app_data=None):
@@ -394,6 +397,9 @@ def show_jump_estimation(sender=None, app_data=None):
     dpg.show_item("plot_line_series_vel")
     dpg.hide_item("plot_line_series_ct_start")
     dpg.hide_item("plot_line_series_ct_end")
+    dpg.hide_item("plot_line_phase_unweight")
+    dpg.hide_item("plot_line_phase_braking")
+    dpg.hide_item("plot_line_phase_propulsion")
 
 
 def show_contact_time(sender=None, app_data=None):
@@ -411,6 +417,9 @@ def show_contact_time(sender=None, app_data=None):
     dpg.hide_item("plot_line_series_vel")
     dpg.show_item("plot_line_series_ct_start")
     dpg.show_item("plot_line_series_ct_end")
+    dpg.hide_item("plot_line_phase_unweight")
+    dpg.hide_item("plot_line_phase_braking")
+    dpg.hide_item("plot_line_phase_propulsion")
 
 
 def on_new_jump(jump_result):

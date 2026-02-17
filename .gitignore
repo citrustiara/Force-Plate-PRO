@@ -32,6 +32,6 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
-
+python_app/jumps_data.db
 index.html
 sprawozdanie.html

@@ -101,11 +101,36 @@ class DatabaseHandler:
             c.execute("ALTER TABLE jumps ADD COLUMN time_takeoff REAL")
         except sqlite3.OperationalError:
             pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN jump_count INTEGER")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN avg_height REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN best_height REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN avg_contact_time REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN best_contact_time REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE jumps ADD COLUMN sub_jumps TEXT")
+        except sqlite3.OperationalError:
+            pass
             
         self.conn.commit()
 
     def save_jump(self, jump_data):
         curve_json = json.dumps(jump_data.get("force_curve", []))
+        sub_jumps_json = json.dumps(jump_data.get("sub_jumps", [])) if jump_data.get("sub_jumps") else None
         
         args = (
             jump_data.get("timestamp", time.time() * 1000),
@@ -131,7 +156,13 @@ class DatabaseHandler:
             jump_data.get("time_unweighting_start"),
             jump_data.get("time_braking_start"),
             jump_data.get("time_propulsion_start"),
-            jump_data.get("time_takeoff")
+            jump_data.get("time_takeoff"),
+            jump_data.get("jump_count"),
+            jump_data.get("avg_height"),
+            jump_data.get("best_height"),
+            jump_data.get("avg_contact_time"),
+            jump_data.get("best_contact_time"),
+            sub_jumps_json
         )
         
         c = self.conn.cursor()
@@ -141,8 +172,9 @@ class DatabaseHandler:
                    formula_peak_power, formula_avg_power, velocity_flight, contact_time,
                    contact_start_time, contact_end_time, curve_start_time,
                    unweighting_duration, braking_duration, propulsion_duration,
-                   time_unweighting_start, time_braking_start, time_propulsion_start, time_takeoff)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
+                   time_unweighting_start, time_braking_start, time_propulsion_start, time_takeoff,
+                   jump_count, avg_height, best_height, avg_contact_time, best_contact_time, sub_jumps)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
         self.conn.commit()
         return c.lastrowid
 

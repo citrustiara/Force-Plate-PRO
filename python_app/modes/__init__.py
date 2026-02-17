@@ -3,12 +3,14 @@ from .base import PhysicsMode, GRAVITY, AIR_THRESHOLD, MOVEMENT_THRESHOLD, STABI
 from .single_jump import SingleJumpMode
 from .jump_estimation import JumpEstimationMode
 from .contact_time import ContactTimeMode
+from .continuous_jump import ContinuousJumpMode
 
 __all__ = [
     'PhysicsMode',
     'SingleJumpMode', 
     'JumpEstimationMode',
     'ContactTimeMode',
+    'ContinuousJumpMode',
     'GRAVITY',
     'AIR_THRESHOLD',
     'MOVEMENT_THRESHOLD',

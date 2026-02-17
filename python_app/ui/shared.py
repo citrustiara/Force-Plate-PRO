@@ -14,6 +14,7 @@ from .callbacks import (
 from .single_jump import create_single_jump_header
 from .jump_estimation import create_jump_estimation_header
 from .contact_time import create_contact_time_header
+from .continuous_jump import create_continuous_jump_header
 
 
 def create_shared_content():
@@ -24,6 +25,7 @@ def create_shared_content():
         create_single_jump_header()
         create_jump_estimation_header()
         create_contact_time_header()
+        create_continuous_jump_header()
         
         dpg.add_separator()
         

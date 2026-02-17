@@ -354,6 +354,7 @@ def _show_single_jump_type(mode_name):
     dpg.show_item("group_header_single")
     dpg.hide_item("group_header_estimation")
     dpg.hide_item("group_header_contact_time")
+    dpg.hide_item("group_header_continuous")
     
     dpg.show_item("plot_line_series")
     dpg.show_item("plot_line_series_mass")
@@ -390,6 +391,7 @@ def show_jump_estimation(sender=None, app_data=None):
     dpg.hide_item("group_header_single")
     dpg.show_item("group_header_estimation")
     dpg.hide_item("group_header_contact_time")
+    dpg.hide_item("group_header_continuous")
     
     dpg.show_item("plot_line_series")
     dpg.show_item("plot_line_series_mass")
@@ -410,6 +412,7 @@ def show_contact_time(sender=None, app_data=None):
     dpg.hide_item("group_header_single")
     dpg.hide_item("group_header_estimation")
     dpg.show_item("group_header_contact_time")
+    dpg.hide_item("group_header_continuous")
     
     dpg.show_item("plot_line_series")
     dpg.hide_item("plot_line_series_mass")
@@ -417,6 +420,27 @@ def show_contact_time(sender=None, app_data=None):
     dpg.hide_item("plot_line_series_vel")
     dpg.show_item("plot_line_series_ct_start")
     dpg.show_item("plot_line_series_ct_end")
+    dpg.hide_item("plot_line_phase_unweight")
+    dpg.hide_item("plot_line_phase_braking")
+    dpg.hide_item("plot_line_phase_propulsion")
+
+
+def show_continuous_jump(sender=None, app_data=None):
+    """Switch to Continuous Jump mode."""
+    _physics.set_mode("Continuous Jump")
+    dpg.hide_item("group_menu")
+    dpg.show_item("group_workspace")
+    dpg.hide_item("group_header_single")
+    dpg.hide_item("group_header_estimation")
+    dpg.hide_item("group_header_contact_time")
+    dpg.show_item("group_header_continuous")
+    
+    dpg.show_item("plot_line_series")
+    dpg.show_item("plot_line_series_mass")
+    dpg.show_item("plot_line_series_power")
+    dpg.show_item("plot_line_series_vel")
+    dpg.hide_item("plot_line_series_ct_start")
+    dpg.hide_item("plot_line_series_ct_end")
     dpg.hide_item("plot_line_phase_unweight")
     dpg.hide_item("plot_line_phase_braking")
     dpg.hide_item("plot_line_phase_propulsion")

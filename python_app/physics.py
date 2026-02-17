@@ -1,5 +1,5 @@
 import numpy as np
-from modes import SingleJumpMode, JumpEstimationMode, ContactTimeMode
+from modes import SingleJumpMode, JumpEstimationMode, ContactTimeMode, ContinuousJumpMode
 from modes.base import AIR_THRESHOLD, GRAVITY
 
 # Constants
@@ -48,7 +48,8 @@ class PhysicsEngine:
             "Deadlift": SingleJumpMode(self),
             "Power Clean": SingleJumpMode(self),
             "Jump Estimation": JumpEstimationMode(self),
-            "Contact Time": ContactTimeMode(self)
+            "Contact Time": ContactTimeMode(self),
+            "Continuous Jump": ContinuousJumpMode(self)
         }
         self.active_mode = self.modes["Single Jump"]
         self.active_mode_name = "Single Jump"

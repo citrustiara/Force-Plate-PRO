@@ -137,10 +137,14 @@ def main():
         elif current_mode_name == "Contact Time":
              filtered_history = [j for j in jump_history if 'contact_time' in j]
         elif current_mode_name == "Jump Estimation":
-             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j]
+             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j and not j.get('jump_count')]
+        elif current_mode_name == "Continuous Jump":
+             filtered_history = [j for j in jump_history if j.get('jump_count')]
 
         target_items = [
-            f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
+            f"#{j['_id']}: {j['jump_count']}J Avg {j.get('avg_height', 0):.1f}cm" 
+            if j.get('jump_count')
+            else f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
             if (j.get('height_flight') or 0) > 0 
             else f"#{j['_id']}: CT {j.get('contact_time', 0):.0f}ms" if 'contact_time' in j
             else f"#{j['_id']}: Imp {j.get('height_impulse', 0):.1f}cm" 

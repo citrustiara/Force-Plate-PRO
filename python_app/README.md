@@ -72,7 +72,10 @@ The application supports comprehensive keyboard navigation for high-speed operat
     *   Stand still on the plate ("WEIGHING").
     *   Wait for the "READY" signal.
     *   Perform your jump.
-4.  **Analyze:** Click on any jump in the history sidebar to view its specific Force/Velocity/Power curves.
+4.  **Analyze:**
+    *   Click on any jump in the history sidebar to view its Force/Velocity/Power curves.
+    *   **Sticky Cursor:** Hold `L/R Shift` or toggle the "Sticky Cursor" checkbox to enable data inspection. Hover over the plot to see exact values at any point.
+    *   **Graph Navigation:** Use `WASD` or `Arrow Keys` to pan, and `Q/E` to zoom for detailed inspection.
 
 ## Troubleshooting
 

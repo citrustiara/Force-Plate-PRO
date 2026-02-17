@@ -82,7 +82,7 @@ def create_shared_content():
                 dpg.add_text("Controls", color=(0, 255, 0))
                 with dpg.group(horizontal=True):
                     dpg.add_button(label="TARE", callback=tare_callback, width=60)
-                    dpg.add_checkbox(label="AutoY", default_value=True, callback=toggle_autofit)
+                    dpg.add_checkbox(label="AutoY", default_value=True, callback=toggle_autofit, tag="check_autofit")
                 dpg.add_checkbox(label="Sticky Cursor", default_value=True, tag="check_sticky_cursor")
                 
                 dpg.add_spacer(height=5)

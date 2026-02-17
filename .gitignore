@@ -33,5 +33,6 @@ ENV/
 .DS_Store
 Thumbs.db
 python_app/jumps_data.db
+python_app/jumps_data.db.old
 index.html
 sprawozdanie.html

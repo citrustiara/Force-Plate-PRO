@@ -17,7 +17,8 @@ from ui.callbacks import (
     get_jump_history,
     is_autofit_enabled,
     auto_connect,
-    update_connection_status
+    update_connection_status,
+    handle_keyboard
 )
 from ui.main_menu import create_main_menu
 from ui.shared import create_shared_content
@@ -113,6 +114,9 @@ def main():
             
             if current_controller:
                 current_controller.on_enter()
+
+        # Keyboard controls
+        handle_keyboard()
 
         # Get Common State
         selected_jump = get_selected_jump()

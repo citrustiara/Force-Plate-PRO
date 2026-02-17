@@ -348,15 +348,10 @@ class ContinuousJumpMode(PhysicsMode):
         avg_contact_time = sum(contact_times) / len(contact_times) if contact_times else 0
         best_contact_time = min(contact_times) if contact_times else 0
         
-        # Generate combined power curve for the entire sequence
+        # Generate combined power curve with velocity resets at landing boundaries
         engine = self.engine
         curve_start = self.sequence_start_time - 600 if self.sequence_start_time > 0 else now - 5000
-        curve = engine.generate_power_curve(
-            curve_start,
-            now,
-            self.jumper_mass_kg,
-            start_velocity=0
-        )
+        curve = self._generate_continuous_curve(curve_start, now, jumps, gravity)
         
         result = {
             "timestamp": now,
@@ -383,3 +378,97 @@ class ContinuousJumpMode(PhysicsMode):
         self.sequence_start_time = 0
         
         return result
+
+    def _generate_continuous_curve(self, curve_start, curve_end, jumps, gravity):
+        """
+        Generate power curve for continuous jumps with velocity resets at landings.
+        
+        During ground contact: integrate force to get velocity/power (normal physics).
+        During flight: linearly interpolate velocity from takeoff_vel to -velocity_flight.
+        At each landing: reset velocity to -velocity_flight (known from flight time).
+        """
+        engine = self.engine
+        import numpy as np
+        
+        # Get ordered buffer
+        if engine.buf_full:
+            p1 = engine.buffer[engine.buf_idx:engine.BUFFER_SIZE]
+            p2 = engine.buffer[0:engine.buf_idx]
+            ordered = np.concatenate((p1, p2))
+        else:
+            ordered = engine.buffer[0:engine.buf_idx]
+        
+        mask = (ordered[:, 0] >= curve_start) & (ordered[:, 0] <= curve_end)
+        relevant = ordered[mask]
+        
+        if len(relevant) == 0:
+            return []
+        
+        # Build flight phase lookup: list of (takeoff_time, landing_time, takeoff_vel, landing_vel)
+        flight_phases = []
+        for j in jumps:
+            t_takeoff = j["takeoff_time"]
+            t_landing = j["landing_time"]
+            v_takeoff = j["velocity_takeoff"]
+            v_landing = -j["velocity_flight"]  # Landing vel is negative of flight-derived vel
+            flight_phases.append((t_takeoff, t_landing, v_takeoff, v_landing))
+        
+        dt = 1.0 / engine.config["frequency"]
+        v = 0.0
+        integration_started = False
+        curve = []
+        
+        for i in range(len(relevant)):
+            sample = relevant[i]
+            t = sample[0]
+            w = sample[1]  # display_kg
+            
+            force_kg = max(0.0, w)
+            force_n = force_kg * gravity
+            current_v = 0.0
+            p = 0.0
+            
+            # Check if we're in a flight phase
+            in_flight = False
+            for (t_to, t_land, v_to, v_land) in flight_phases:
+                if t_to <= t <= t_land:
+                    # Linearly interpolate velocity during flight
+                    flight_duration = t_land - t_to
+                    if flight_duration > 0:
+                        frac = (t - t_to) / flight_duration
+                        current_v = v_to * (1.0 - frac) + v_land * frac
+                    else:
+                        current_v = v_to
+                    p = 0.0  # No power during flight (not on plate)
+                    in_flight = True
+                    break
+                elif t > t_land and abs(t - t_land) < 2:
+                    # Just landed - reset velocity
+                    v = v_land
+                    integration_started = True
+                    break
+            
+            if not in_flight:
+                # Ground contact - integrate normally
+                if t >= self.sequence_start_time and not integration_started:
+                    integration_started = True
+                    v = 0.0
+                
+                if integration_started:
+                    net_kg = force_kg - self.jumper_mass_kg
+                    net_force_n = net_kg * gravity
+                    if self.jumper_mass_kg > 0:
+                        acc = net_force_n / self.jumper_mass_kg
+                        v += acc * dt
+                    current_v = v
+                    p = force_n * current_v
+            
+            curve.append({
+                "t": t,
+                "v": w,
+                "f": force_n,
+                "p": p,
+                "vel": current_v
+            })
+        
+        return curve

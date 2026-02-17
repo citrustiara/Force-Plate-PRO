@@ -218,7 +218,12 @@ class DatabaseHandler:
                 "time_unweighting_start": get_val("time_unweighting_start"),
                 "time_braking_start": get_val("time_braking_start"),
                 "time_propulsion_start": get_val("time_propulsion_start"),
-                "time_takeoff": get_val("time_takeoff")
+                "time_takeoff": get_val("time_takeoff"),
+                "jump_count": get_val("jump_count"),
+                "avg_height": get_val("avg_height"),
+                "best_height": get_val("best_height"),
+                "avg_contact_time": get_val("avg_contact_time"),
+                "best_contact_time": get_val("best_contact_time"),
             }
             
             # Remove None values to avoid 'contact_time' in j being true for None
@@ -229,6 +234,13 @@ class DatabaseHandler:
             if curve_str:
                 try:
                     j["force_curve"] = json.loads(curve_str)
+                except:
+                    pass
+            
+            sub_jumps_str = get_val("sub_jumps")
+            if sub_jumps_str:
+                try:
+                    j["sub_jumps"] = json.loads(sub_jumps_str)
                 except:
                     pass
                     

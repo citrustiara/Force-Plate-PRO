@@ -93,7 +93,7 @@ class SingleJumpController(ModeController):
             dpg.add_separator()
             
             # --- METRICS GROUP 2 (DEBUG / DETAILS) ---
-            with dpg.collapsing_header(label="Debug / Additional Metrics", default_open=True):
+            with dpg.collapsing_header(label="Debug / Additional Metrics", default_open=False):
                 with dpg.group(horizontal=True):
                     with dpg.group():
                         dpg.add_text("HEIGHT (Impulse)", color=(150, 150, 150))

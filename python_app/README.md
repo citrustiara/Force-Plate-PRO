@@ -11,10 +11,29 @@ The desktop companion application for the Force Plate PRO system. Built with Pyt
     *   *Bounce Protection:* Filters out mechanical vibrations after takeoff.
 *   **Exercise Modes:**
     *   **Countermovement Jump (CMJ):** Full phase analysis (Unweighting, Braking, Propulsion, Flight, Landing).
-    *   **Contact Time:** optimized for measuring quick rebound jumps.
+    *   **Contact Time:** Optimized for measuring quick rebound jumps.
+    *   **Continuous Jump:** Chains multiple jumps in a single recording. Tracks per-jump height, power, and contact time, providing an aggregated summary once the athlete steps off the plate.
     *   **Isometric Tests:** (In development) For measuring peak force without movement.
 *   **Data Persistence:** Automatic saving of jump history and raw data to `jumps_data.db` (SQLite).
 *   **Hardware Integration:** Auto-connects to ESP32 via USB Serial (defaults to 921600 baud).
+
+## Keyboard Controls
+
+The application supports comprehensive keyboard navigation for high-speed operation:
+
+| Category | Key | Action |
+| :--- | :--- | :--- |
+| **Navigation** | `Esc` | Deselect jump / Back to Main Menu |
+| | `Enter` | Select mode in Main Menu |
+| | `Up/Down` | Navigate Menu or Jump History |
+| **Plotting** | `L/R Shift` | Toggle Sticky Cursor (info on hover) |
+| | `Y` | Toggle Y-Axis Auto-fit |
+| | `R` | Reset View (return to live stream) |
+| | `WASD / Arrows` | Pan graph (W/S vertical, A/D horizontal) |
+| | `Q / E` | Zoom Graph Out / In |
+| **System** | `T` | Manual Tare |
+| | `Z` | Reset Connection (soft restart) |
+| | `X` | Reset Device (hard reset command) |
 
 ## Installation
 

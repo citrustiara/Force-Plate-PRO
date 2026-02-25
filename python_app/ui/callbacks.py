@@ -251,7 +251,9 @@ def history_click_callback(sender, app_data):
             
             dpg.fit_axis_data("x_axis")
             dpg.fit_axis_data("y_axis")
+            dpg.set_axis_limits_auto("y_axis_power")
             dpg.fit_axis_data("y_axis_power")
+            dpg.set_axis_limits_auto("y_axis_vel")
             dpg.fit_axis_data("y_axis_vel")
             
     except Exception as e:

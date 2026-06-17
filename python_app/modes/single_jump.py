@@ -6,8 +6,8 @@ States:
 """
 from .base import (
     PhysicsMode, 
-    AIR_THRESHOLD, 
-    MOVEMENT_THRESHOLD, 
+    AIR_THRESHOLD_KG,
+    MOVEMENT_THRESHOLD_KG,
     STABILITY_TOLERANCE_KG,
     MAX_PROPULSION_TIME_MS,
     MIN_AIR_TIME,
@@ -200,9 +200,9 @@ class SingleJumpMode(PhysicsMode):
         raw_per_kg = engine.config["raw_per_kg"]
         gravity = engine.config["gravity"]
         
-        # Convert raw reading to weight
-        weight = raw - engine.zero_offset
-        display_kg = weight / raw_per_kg
+        # Convert raw reading through the shared signal-conditioning path.
+        weight = engine.sample_raw_delta(raw)
+        display_kg = engine.sample_kg(raw)
         result = None
         
         # --- STATE MACHINE ---
@@ -211,7 +211,7 @@ class SingleJumpMode(PhysicsMode):
         if self.state == "IN_AIR":
             current_air_time = now - self.takeoff_time
             
-            if weight >= AIR_THRESHOLD:
+            if display_kg >= AIR_THRESHOLD_KG:
                 # Landing detected
                 if current_air_time >= MIN_AIR_TIME:
                     self._handle_landing(now, current_air_time, gravity)
@@ -224,7 +224,7 @@ class SingleJumpMode(PhysicsMode):
             return self._make_response(display_kg, result)
 
         # 2. Takeoff detection (priority check)
-        if weight < AIR_THRESHOLD and self.current_velocity > 0:
+        if display_kg < AIR_THRESHOLD_KG and self.current_velocity > 0:
             if self.state in ["READY", "PROPULSION", "LANDING"]:
                 # Save phase times before they get reset
                 self.saved_phase_times = {
@@ -240,7 +240,7 @@ class SingleJumpMode(PhysicsMode):
                 return self._make_response(display_kg, result)
 
         # 3. IDLE reset when weight is low (stepped off platform)
-        if weight < AIR_THRESHOLD and self.state not in ["PROPULSION", "LANDING", "IN_AIR"]:
+        if display_kg < AIR_THRESHOLD_KG and self.state not in ["PROPULSION", "LANDING", "IN_AIR"]:
             if self.weight_confirmed:
                 self.weight_confirmed = False
                 self.jumper_mass_kg = 0
@@ -266,7 +266,7 @@ class SingleJumpMode(PhysicsMode):
             result = self._process_integration_state(now, weight, display_kg, raw_per_kg, gravity, result)
         # 5. Weighing / Ready state 
         else:
-            self._process_ready_state(now, weight, raw_per_kg)
+            self._process_ready_state(now, weight, display_kg, raw_per_kg)
 
         return self._make_response(display_kg, result)
 
@@ -344,7 +344,7 @@ class SingleJumpMode(PhysicsMode):
                 result = res
 
         # Step-off detection (low weight + negative velocity = user stepped off)
-        if weight < AIR_THRESHOLD and self.current_velocity < 0:
+        if display_kg < AIR_THRESHOLD_KG and self.current_velocity < 0:
             if self.low_weight_start_time == 0:
                 self.low_weight_start_time = now
             elif now - self.low_weight_start_time > 500:  # 500ms timeout
@@ -436,19 +436,12 @@ class SingleJumpMode(PhysicsMode):
         
         # Look back up to 200 samples (~150ms)
         lookback_count = 200
-        start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
+        start_index = engine.sample_buffer.recent_start_index(lookback_count)
         
-        last_zero_time = engine.buffer[start_index][0]  # Default to start
+        last_zero_time = engine.sample_buffer.at(start_index)[0]  # Default to start
         
-        steps = 0
-        i = start_index
-        while i != engine.buf_idx:
-            b = engine.buffer[i]
+        for steps, b in enumerate(engine.sample_buffer.iter_from_index_to_current(start_index, lookback_count)):
             if b[0] == 0:
-                i = (i + 1) % engine.BUFFER_SIZE
-                steps += 1
-                if steps > lookback_count:
-                    break
                 continue
             
             # Check if force is close to bodyweight (net force ~= 0)
@@ -456,11 +449,6 @@ class SingleJumpMode(PhysicsMode):
             force_kg = b[1]
             if abs(force_kg - self.jumper_mass_kg) < 0.5:
                 last_zero_time = b[0]
-            
-            i = (i + 1) % engine.BUFFER_SIZE
-            steps += 1
-            if steps >= lookback_count:
-                break
         
         return last_zero_time
 
@@ -498,7 +486,7 @@ class SingleJumpMode(PhysicsMode):
         
         return result
 
-    def _process_ready_state(self, now, weight, raw_per_kg):
+    def _process_ready_state(self, now, weight, display_kg, raw_per_kg):
         """Handle WEIGHING calibration and READY trigger detection."""
         if not self.weight_confirmed:
             # WEIGHING state - calibrate bodyweight
@@ -537,8 +525,8 @@ class SingleJumpMode(PhysicsMode):
                 self.calibration_start_time = 0
         else:
             # READY state - detect movement to trigger propulsion
-            diff = abs(weight - self.static_weight_raw)
-            if diff > MOVEMENT_THRESHOLD:
+            diff = abs(display_kg - self.jumper_mass_kg)
+            if diff > MOVEMENT_THRESHOLD_KG:
                 self.state = "PROPULSION"
                 self.integration_start_time = now
                 self.jump_start_y = now
@@ -557,9 +545,9 @@ class SingleJumpMode(PhysicsMode):
         gravity = engine.config["gravity"]
         
         lookback_count = 100  # ~77ms at 1300Hz
-        start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
+        start_index = engine.sample_buffer.recent_start_index(lookback_count)
         
-        start_pt = engine.buffer[start_index]
+        start_pt = engine.sample_buffer.at(start_index)
         self.integration_start_time = start_pt[0]
         self.jump_start_y = start_pt[0]
             
@@ -573,17 +561,10 @@ class SingleJumpMode(PhysicsMode):
         # Fixed dt from frequency
         iter_dt = 1.0 / engine.config["frequency"]
             
-        steps = 0
-        i = start_index
-        while i != engine.buf_idx:
-            b = engine.buffer[i]
+        for b in engine.sample_buffer.iter_from_index_to_current(start_index, lookback_count):
             
             # Skip invalid buffer entries
             if b[0] == 0:
-                i = (i + 1) % engine.BUFFER_SIZE
-                steps += 1
-                if steps > lookback_count:
-                    break
                 continue
             
             # Integrate this sample
@@ -605,10 +586,5 @@ class SingleJumpMode(PhysicsMode):
                 self.max_propulsion_force = force_n
             if instant_power > self.peak_power:
                 self.peak_power = instant_power
-                
-            i = (i + 1) % engine.BUFFER_SIZE
-            steps += 1
-            if steps >= lookback_count:
-                break
         
         self.phase_start_velocity = 0.0

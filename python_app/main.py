@@ -15,7 +15,6 @@ from ui.callbacks import (
     on_new_jump, 
     get_selected_jump, 
     get_jump_history,
-    is_autofit_enabled,
     auto_connect,
     update_connection_status,
     handle_keyboard
@@ -23,6 +22,7 @@ from ui.callbacks import (
 from ui.main_menu import create_main_menu
 from ui.shared import create_shared_content
 from ui.factory import get_controller
+from ui.history import filter_history_for_mode, format_history_items
 from ui.plot_manager import PlotManager
 
 
@@ -35,8 +35,11 @@ def main():
     
     config = {"gravity": 9.80665, "frequency": 1288}
     if saved_raw_per_kg:
-        config["raw_per_kg"] = float(saved_raw_per_kg)
-        print(f"Loaded raw_per_kg from DB: {config['raw_per_kg']}")
+        try:
+            config["raw_per_kg"] = float(saved_raw_per_kg)
+            print(f"Loaded raw_per_kg from DB: {config['raw_per_kg']}")
+        except (TypeError, ValueError):
+            print(f"Ignoring invalid raw_per_kg setting: {saved_raw_per_kg!r}")
         
     physics = PhysicsEngine(config)
     physics.on_calib_callback = lambda val: db.save_setting("raw_per_kg", val)
@@ -94,6 +97,7 @@ def main():
 
     while dpg.is_dearpygui_running():
         now = time.time()
+        serial_handler.process_pending()
         
         # Connection monitoring - retry every 1 second if not connected
         if now - last_connection_check > 1.0:
@@ -134,26 +138,8 @@ def main():
         # "Single Jump" and variants vs "Contact Time" vs "Jump Estimation"
         
         current_items = dpg.get_item_configuration("list_history")["items"]
-        filtered_history = jump_history
-        
-        if current_mode_name in ["Single Jump", "Box Drop", "Box Drop Jump", "Push Up", "Squat", "Deadlift", "Power Clean"]:
-             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is not None]
-        elif current_mode_name == "Contact Time":
-             filtered_history = [j for j in jump_history if 'contact_time' in j]
-        elif current_mode_name == "Jump Estimation":
-             filtered_history = [j for j in jump_history if j.get('formula_peak_power') is None and 'contact_time' not in j and not j.get('jump_count')]
-        elif current_mode_name == "Continuous Jump":
-             filtered_history = [j for j in jump_history if j.get('jump_count')]
-
-        target_items = [
-            f"#{j['_id']}: {j['jump_count']}J Avg {j.get('avg_height', 0):.1f}cm" 
-            if j.get('jump_count')
-            else f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
-            if (j.get('height_flight') or 0) > 0 
-            else f"#{j['_id']}: CT {j.get('contact_time', 0):.0f}ms" if 'contact_time' in j
-            else f"#{j['_id']}: Imp {j.get('height_impulse', 0):.1f}cm" 
-            for j in filtered_history
-        ]
+        filtered_history = filter_history_for_mode(jump_history, current_mode_name)
+        target_items = format_history_items(filtered_history)
         
         if len(current_items) != len(target_items) or (len(current_items) > 0 and current_items[0] != target_items[0]):
             dpg.configure_item("list_history", items=target_items)

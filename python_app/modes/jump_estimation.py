@@ -3,9 +3,12 @@ Jump Estimation Mode - User inputs bodyweight manually, results based on impulse
 """
 from .base import (
     PhysicsMode, 
-    AIR_THRESHOLD, 
+    AIR_THRESHOLD_KG,
     STABILITY_TOLERANCE_KG
 )
+
+MIN_MANUAL_MASS_KG = 5.0
+MAX_MANUAL_MASS_KG = 300.0
 
 
 class JumpEstimationMode(PhysicsMode):
@@ -40,6 +43,10 @@ class JumpEstimationMode(PhysicsMode):
         return self.manual_mass_kg
 
     def set_mass(self, mass_kg):
+        if not MIN_MANUAL_MASS_KG <= mass_kg <= MAX_MANUAL_MASS_KG:
+            raise ValueError(
+                f"manual mass must be between {MIN_MANUAL_MASS_KG:g} and {MAX_MANUAL_MASS_KG:g} kg"
+            )
         self.manual_mass_kg = mass_kg
         self.static_weight_raw = mass_kg * self.engine.config["raw_per_kg"]
         
@@ -54,15 +61,15 @@ class JumpEstimationMode(PhysicsMode):
         if self.static_weight_raw == 0 and self.manual_mass_kg > 0:
              self.static_weight_raw = self.manual_mass_kg * raw_per_kg
              
-        weight = raw - engine.zero_offset
-        display_kg = weight / raw_per_kg
+        weight = engine.sample_raw_delta(raw)
+        display_kg = engine.sample_kg(raw)
         
         result = None
         
         if self.state == "IDLE":
              self.state = "READY"
         
-        if weight < AIR_THRESHOLD:
+        if display_kg < AIR_THRESHOLD_KG:
             # IN AIR
             if self.state == "PROPULSION":
                 # Add start velocity
@@ -107,7 +114,7 @@ class JumpEstimationMode(PhysicsMode):
                 else:
                     self.state = "READY"
 
-        elif weight >= AIR_THRESHOLD:
+        elif display_kg >= AIR_THRESHOLD_KG:
             # ON GROUND
             if self.state == "IN_AIR":
                  self.state = "READY" 
@@ -167,9 +174,9 @@ class JumpEstimationMode(PhysicsMode):
         gravity = engine.config["gravity"]
         
         lookback_count = 100  # ~77ms at 1300Hz
-        start_index = (engine.buf_idx - lookback_count) % engine.BUFFER_SIZE
+        start_index = engine.sample_buffer.recent_start_index(lookback_count)
         
-        start_pt = engine.buffer[start_index]
+        start_pt = engine.sample_buffer.at(start_index)
         self.integration_start_time = start_pt[0]
         self.jump_start_y = start_pt[0]
         
@@ -183,17 +190,10 @@ class JumpEstimationMode(PhysicsMode):
         # Fixed dt from frequency
         iter_dt = 1.0 / engine.config["frequency"]
         
-        steps = 0
-        i = start_index
-        while i != engine.buf_idx:
-            b = engine.buffer[i]
+        for b in engine.sample_buffer.iter_from_index_to_current(start_index, lookback_count):
             
             # Skip invalid buffer entries
             if b[0] == 0:
-                i = (i + 1) % engine.BUFFER_SIZE
-                steps += 1
-                if steps > lookback_count:
-                    break
                 continue
             
             # Integrate this sample
@@ -215,8 +215,3 @@ class JumpEstimationMode(PhysicsMode):
                 self.max_propulsion_force = force_n
             if instant_power > self.peak_power:
                 self.peak_power = instant_power
-            
-            i = (i + 1) % engine.BUFFER_SIZE
-            steps += 1
-            if steps >= lookback_count:
-                break

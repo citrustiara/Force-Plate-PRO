@@ -97,7 +97,7 @@ The desktop application is built using **Python 3.10** and **DearPyGui** (GPU-ac
 *   **`physics.py`**: The core Physics Engine.
     *   **Circular Buffering:** Stores last ~8s of high-frequency data for "Retroactive Analysis" (e.g., looking back 100ms before a trigger).
     *   **Integration Loop:** Calculates Velocity and Power frame-by-frame.
-    *   **Calibration:** Handles linear regression to convert raw ADC values to Kilograms.
+    *   **Calibration:** Converts raw ADC values to kilograms using a tare offset and calibration factor.
 *   **`modes/`**: State Machine implementations for different exercises.
     *   **`single_jump.py`**: Implements the Countermovement Jump (CMJ) logic.
         *   *States:* `IDLE` $\rightarrow$ `WEIGHING` $\rightarrow$ `READY` $\rightarrow$ `PROPULSION` $\rightarrow$ `IN_AIR` $\rightarrow$ `LANDING`.
@@ -106,7 +106,25 @@ The desktop application is built using **Python 3.10** and **DearPyGui** (GPU-ac
     *   **`plot_manager.py`**: Handles high-performance plotting, downsampling 1280Hz data to 60FPS for rendering.
 *   **`database.py`**: SQLite storage for jump history and user settings.
 
-### 3.2 Physics Algorithms
+### 3.2 Signal Processing Strategy
+
+The current processing path intentionally keeps the ESP32 simple: it streams raw ADC-derived values and lets the Python app handle calibration, event detection, physics integration, and plotting. The only heavy smoothing currently used is display downsampling in `ui/plot_manager.py`, where samples are averaged into plot-sized chunks. That is useful for a calm live graph, but it should not become the only denoising strategy for measurement logic because averaging can hide short force peaks and shift event timing.
+
+For jump analysis, a **time-domain filter is usually the right first upgrade**:
+
+*   **Live/event detection:** use a causal low-pass IIR filter, moving median/Hampel spike rejection, and adaptive baseline tracking. These preserve real-time behavior and keep takeoff/landing detection predictable.
+*   **Saved/offline analysis:** optionally apply zero-phase filtering to stored curves before calculating derived metrics, while keeping the raw curve available for review.
+*   **Plotting:** keep display downsampling separate from measurement filtering. The graph can be smoother than the data used for physics.
+
+Fourier transforms and Welch power spectral density are still valuable, but mostly as **diagnostic tools**:
+
+*   Use **FFT/Welch** on quiet standing, unloaded plate, and impact recordings to identify dominant noise bands, mechanical resonance, or mains interference.
+*   Use those findings to choose a cutoff/notch filter.
+*   Avoid using FFT block filtering as the primary live denoising method unless latency is acceptable and the block/window boundaries are handled carefully.
+
+In short: FFT/Welch helps decide what filter to build; a small causal filter stack should do the real-time denoising.
+
+### 3.3 Physics Algorithms
 The system uses the **Impulse-Momentum Method** to calculate jump metrics from Force-Time data.
 
 1.  **Net Force:** $F_{net} = F_{measured} - (mass \cdot g)$
@@ -117,8 +135,8 @@ The system uses the **Impulse-Momentum Method** to calculate jump metrics from F
 **Key Algorithmic Features:**
 *   **Retroactive Pulse Integration:** The system buffers data continuously. When movement is detected, it "rewinds" integration by ~75ms to capture the critical initial start of the movement that occurred before the trigger threshold was crossed.
 *   **Automatic Phase Detection:** Robustly identifies jump phases by analyzing velocity crossings. It strictly distinguishes between *Unweighting* and *Flight* based on velocity and time of the low weight period.
-*   **Dynamic Stability Check:** During weighing, the system calculates running stats (mean/variance) on 300ms windows to ensure the user is perfectly still before locking in bodyweight.
-*   **Drift Compensation:** Smart auto-tare logic monitors the platform during IDLE states. If determining that the platform is empty but the weight has drifted (>0.2kg) after 1 second of inactivity, it automatically re-zeros the sensors.
+*   **Dynamic Stability Check:** During weighing, the system uses short sample blocks to ensure the user is still before locking in bodyweight.
+*   **Tare and Calibration Flow:** The ESP32 performs startup tare and the desktop app can trigger tare/calibration from the UI.
 *   **Impulse-Momentum Method:** Calculates jump height by integrating acceleration to find Takeoff Velocity ($v_{takeoff}^2 / 2g$).
 *   **Flight Time Method:** Independently calculates height from air time, allowing for comparison between methods ($g \cdot t_{flight}^2 / 8$).
 *   **Continuous Jump Physics:** For rebound jumps, the impact velocity is derived directly from the previous jump's **Flight Time**, ensuring extremely accurate momentum conservation for the next takeoff.
@@ -126,6 +144,32 @@ The system uses the **Impulse-Momentum Method** to calculate jump metrics from F
 
 ![App Screenshot](images/example.png)
 *Figure 8. Desktop Application Interface showing Force, Velocity, and Power curves.*
+
+### 3.4 Refactoring Roadmap
+
+Some files currently combine state transitions, edge-case handling, physics integration, result formatting, UI updates, and persistence. The largest examples are `modes/single_jump.py`, `modes/continuous_jump.py`, and `ui/callbacks.py`. A cleaner structure would split the project by responsibility:
+
+```text
+python_app/
+  acquisition/        Serial input, packet parsing, device commands
+  signal_processing/  Calibration, filtering, baseline, sample buffers
+  domain/             Dataclasses for samples, jumps, phases, metrics
+  modes/              Small state machines for each test type
+  metrics/            Flight-time, impulse, power, phase calculations
+  storage/            SQLite schema, migrations, repositories
+  ui/                 Dear PyGui views/controllers only
+  config/             Constants and user settings
+```
+
+The first practical step is to extract shared mode utilities before changing behavior:
+
+*   `signal_processing.SampleBuffer`: circular buffer ordering, windows, averages, and curve extraction.
+*   `signal_processing.SignalConditioner`: raw-to-kg conversion, optional low-pass filtering, baseline/tare helpers.
+*   `JumpState` enum plus transition helpers instead of free-form state strings.
+*   `JumpResultBuilder`: one place for result dictionaries, database field names, and curve payloads.
+*   `ui/actions.py` and `ui/selection.py`: split `callbacks.py` into connection, history, mode switching, keyboard, and plot-cursor concerns.
+
+This keeps the current algorithms recognizable while removing the long chains of nested `if`/`elif` edge cases.
 
 ## 4. Usage
 

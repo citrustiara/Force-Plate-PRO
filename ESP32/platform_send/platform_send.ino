@@ -124,6 +124,7 @@ int tareCount = 0;
 long tareMin = 0;
 long tareMax = 0;
 unsigned long tareStartTime = 0;
+unsigned long sampleSequence = 0;
 
 // Serial command buffer
 String cmdBuffer = "";
@@ -136,6 +137,7 @@ void startTare() {
   tareMin = 2000000000;
   tareMax = -2000000000;
   tareStartTime = millis();
+  sampleSequence = 0;
   Serial.println("{\"event\":\"tare_start\"}");
 }
 
@@ -249,11 +251,8 @@ void loop() {
 
     long weight = raw - zeroOffset;
 
-    // Handle negative weight (inverted sensor)
-    if (weight < -10000)
-      weight = -weight;
-
-    // Send only the weight value
-    Serial.printf("{\"w\":%ld}\n", weight);
+    // Send signed weight delta and sequence number. The desktop app owns
+    // polarity/calibration decisions and can detect dropped serial samples.
+    Serial.printf("{\"w\":%ld,\"seq\":%lu}\n", weight, sampleSequence++);
   }
 }

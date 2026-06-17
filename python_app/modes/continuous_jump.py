@@ -8,8 +8,8 @@ On step-off, emits one aggregated result with all individual jumps.
 """
 from .base import (
     PhysicsMode, 
-    AIR_THRESHOLD, 
-    MOVEMENT_THRESHOLD, 
+    AIR_THRESHOLD_KG,
+    MOVEMENT_THRESHOLD_KG,
     STABILITY_TOLERANCE_KG,
     MAX_PROPULSION_TIME_MS,
     MIN_AIR_TIME,
@@ -91,8 +91,8 @@ class ContinuousJumpMode(PhysicsMode):
         raw_per_kg = engine.config["raw_per_kg"]
         gravity = engine.config["gravity"]
         
-        weight = raw - engine.zero_offset
-        display_kg = weight / raw_per_kg
+        weight = engine.sample_raw_delta(raw)
+        display_kg = engine.sample_kg(raw)
         result = None
         
         # --- STATE MACHINE ---
@@ -101,7 +101,7 @@ class ContinuousJumpMode(PhysicsMode):
         if self.state == "IN_AIR":
             current_air_time = now - self.takeoff_time
             
-            if weight >= AIR_THRESHOLD:
+            if display_kg >= AIR_THRESHOLD_KG:
                 if current_air_time >= MIN_AIR_TIME:
                     self._handle_landing(now, current_air_time, gravity)
                     
@@ -113,7 +113,7 @@ class ContinuousJumpMode(PhysicsMode):
             return self._make_response(display_kg, result)
 
         # 2. Takeoff detection
-        if weight < AIR_THRESHOLD and self.current_velocity > 0:
+        if display_kg < AIR_THRESHOLD_KG and self.current_velocity > 0:
             if self.state in ["READY", "PROPULSION", "LANDING"]:
                 # Record contact time for the previous jump
                 if self.state == "LANDING" and len(self.completed_jumps) > 0:
@@ -126,7 +126,7 @@ class ContinuousJumpMode(PhysicsMode):
                 return self._make_response(display_kg, result)
 
         # 3. IDLE when weight is low (stepped off)
-        if weight < AIR_THRESHOLD and self.state not in ["PROPULSION", "LANDING", "IN_AIR"]:
+        if display_kg < AIR_THRESHOLD_KG and self.state not in ["PROPULSION", "LANDING", "IN_AIR"]:
             if len(self.completed_jumps) > 0:
                 result = self._finalize_sequence(now, gravity)
             
@@ -151,7 +151,7 @@ class ContinuousJumpMode(PhysicsMode):
             result = self._process_integration(now, weight, display_kg, raw_per_kg, gravity, result)
         # 5. Weighing / Ready
         else:
-            self._process_ready_state(now, weight, raw_per_kg)
+            self._process_ready_state(now, weight, display_kg, raw_per_kg)
 
         return self._make_response(display_kg, result)
 
@@ -209,7 +209,7 @@ class ContinuousJumpMode(PhysicsMode):
         """Handle physics integration during PROPULSION or LANDING."""
         
         # Step-off detection using both weight AND velocity
-        if weight < AIR_THRESHOLD and self.current_velocity <= 0:
+        if display_kg < AIR_THRESHOLD_KG and self.current_velocity <= 0:
             if self.low_weight_start_time == 0:
                 self.low_weight_start_time = now
             else:
@@ -286,7 +286,7 @@ class ContinuousJumpMode(PhysicsMode):
         
         return result
 
-    def _process_ready_state(self, now, weight, raw_per_kg):
+    def _process_ready_state(self, now, weight, display_kg, raw_per_kg):
         """Handle WEIGHING calibration and READY trigger detection."""
         if not self.weight_confirmed:
             self.state = "WEIGHING"
@@ -322,8 +322,8 @@ class ContinuousJumpMode(PhysicsMode):
                         self.completed_jumps = []
                 self.calibration_start_time = 0
         else:
-            diff = abs(weight - self.static_weight_raw)
-            if diff > MOVEMENT_THRESHOLD:
+            diff = abs(display_kg - self.jumper_mass_kg)
+            if diff > MOVEMENT_THRESHOLD_KG:
                 self.state = "PROPULSION"
                 self.integration_start_time = now
                 self.jump_start_y = now
@@ -388,18 +388,7 @@ class ContinuousJumpMode(PhysicsMode):
         At each landing: reset velocity to -velocity_flight (known from flight time).
         """
         engine = self.engine
-        import numpy as np
-        
-        # Get ordered buffer
-        if engine.buf_full:
-            p1 = engine.buffer[engine.buf_idx:engine.BUFFER_SIZE]
-            p2 = engine.buffer[0:engine.buf_idx]
-            ordered = np.concatenate((p1, p2))
-        else:
-            ordered = engine.buffer[0:engine.buf_idx]
-        
-        mask = (ordered[:, 0] >= curve_start) & (ordered[:, 0] <= curve_end)
-        relevant = ordered[mask]
+        relevant = engine.sample_buffer.slice_time_range(curve_start, curve_end)
         
         if len(relevant) == 0:
             return []

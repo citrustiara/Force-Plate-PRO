@@ -1,6 +1,6 @@
-import numpy as np
 from modes import SingleJumpMode, JumpEstimationMode, ContactTimeMode, ContinuousJumpMode
-from modes.base import AIR_THRESHOLD, GRAVITY
+from modes.base import GRAVITY
+from signal_processing import SampleBuffer, SignalConditioner
 
 # Constants
 BUFFER_SIZE = 10000  # ~8s
@@ -15,17 +15,15 @@ class PhysicsEngine:
         if config:
             self.config.update(config)
 
-        # Circular buffer for physics data
-        # Columns: 0=Time(ms), 1=Weight(kg)
-        self.buffer = np.zeros((BUFFER_SIZE, 2), dtype=np.float64)
-        self.buf_idx = 0
-        self.buf_full = False
+        self.signal = SignalConditioner(self.config)
+        self.current_sample = None
+        self.sample_buffer = SampleBuffer(BUFFER_SIZE)
+        self.buffer = self.sample_buffer.data  # Compatibility for existing modes
         self.BUFFER_SIZE = BUFFER_SIZE # Access for modes
 
         self.logic_time = 0.0
         
         # Tare Logic
-        self.zero_offset = 0.0
         self.tare_start_time = 0.0
         self.tare_sum = 0.0
         self.tare_count = 0
@@ -55,6 +53,22 @@ class PhysicsEngine:
         self.active_mode_name = "Single Jump"
         self.on_calib_callback = None
 
+    @property
+    def zero_offset(self):
+        return self.signal.zero_offset
+
+    @zero_offset.setter
+    def zero_offset(self, value):
+        self.signal.set_zero(value)
+
+    @property
+    def buf_idx(self):
+        return self.sample_buffer.idx
+
+    @property
+    def buf_full(self):
+        return self.sample_buffer.full
+
     def set_mode(self, mode_name):
         if mode_name in self.modes:
             self.active_mode = self.modes[mode_name]
@@ -66,6 +80,7 @@ class PhysicsEngine:
 
     def reset_state(self):
         self.logic_time = 0.0
+        self.current_sample = None
         self.tare_sum = 0
         self.tare_count = 0
         self.is_taring = False
@@ -76,12 +91,10 @@ class PhysicsEngine:
 
     def reset(self):
         self.reset_state()
-        self.buffer.fill(0)
-        self.buf_idx = 0
-        self.buf_full = False
+        self.sample_buffer.clear()
 
     def set_zero(self, offset):
-        self.zero_offset = offset
+        self.signal.set_zero(offset)
         self.reset_state()
 
     def set_frequency(self, hz):
@@ -107,12 +120,10 @@ class PhysicsEngine:
         
         if now - self.tare_start_time >= 200:
             if self.tare_count > 0:
-                self.zero_offset = self.tare_sum / self.tare_count
+                self.signal.set_zero(self.tare_sum / self.tare_count)
             self.is_taring = False
             # Clear buffer to avoid visual artifacts from old timestamps
-            self.buffer.fill(0)
-            self.buf_idx = 0
-            self.buf_full = False
+            self.sample_buffer.clear()
             self.reset_state()
 
     def start_calibrate(self, known_weight_kg):
@@ -146,39 +157,11 @@ class PhysicsEngine:
 
     def add_to_buffer(self, t, w):
         """Add a sample to the circular buffer."""
-        self.buffer[self.buf_idx] = [t, w]
-        self.buf_idx = (self.buf_idx + 1) % BUFFER_SIZE
-        if self.buf_idx == 0:
-            self.buf_full = True
+        self.sample_buffer.add(t, w)
 
     def get_buffer_average(self, count):
         """Get average weight from the last 'count' samples."""
-        if count <= 0:
-            return 0.0
-            
-        # If buffer isn't full and not enough samples, just take what we have
-        total_available = BUFFER_SIZE if self.buf_full else self.buf_idx
-        if total_available == 0:
-            return 0.0
-            
-        count = min(count, total_available)
-        
-        # Calculate indices
-        end_idx = self.buf_idx
-        start_idx = (end_idx - count) % BUFFER_SIZE
-        
-        if start_idx < end_idx:
-            # Contiguous chunk
-            chunk = self.buffer[start_idx:end_idx, 1]
-            return np.mean(chunk)
-        else:
-            # Wrap around
-            chunk1 = self.buffer[start_idx:, 1]
-            chunk2 = self.buffer[:end_idx, 1]
-            # Weighted average or just sum both and divide
-            s1 = np.sum(chunk1)
-            s2 = np.sum(chunk2)
-            return (s1 + s2) / count
+        return self.sample_buffer.average_kg(count)
             
     # Proxy properties for backward compatibility / easy access if needed
     @property
@@ -192,20 +175,21 @@ class PhysicsEngine:
 
     def get_buffer_view_time_window(self, end_time, duration_ms):
         """ Efficiently returns a view of the buffer for the last `duration_ms` """
-        limit = BUFFER_SIZE if self.buf_full else self.buf_idx
-        
-        if self.buf_full:
-            p1 = self.buffer[self.buf_idx:BUFFER_SIZE]
-            p2 = self.buffer[0:self.buf_idx]
-            ordered = np.concatenate((p1, p2))
-        else:
-            ordered = self.buffer[0:self.buf_idx]
-            
-        start_time = end_time - duration_ms
-        mask = ordered[:, 0] >= start_time
-        return ordered[mask]
+        return self.sample_buffer.window(end_time, duration_ms)
 
-    def process_sample(self, raw):
+    def sample_raw_delta(self, raw):
+        if self.current_sample is not None and self.current_sample.raw == raw:
+            return self.current_sample.raw_delta
+        return self.signal.raw_delta(raw)
+
+    def sample_kg(self, raw):
+        if self.current_sample is not None and self.current_sample.raw == raw:
+            if self.config.get("use_filtered_for_measurement", False):
+                return self.current_sample.filtered_kg
+            return self.current_sample.kg
+        return self.signal.raw_to_kg(raw)
+
+    def process_sample(self, raw, missing_samples=0):
         """Process a single raw sample from the device.
         
         Uses fixed 1/frequency for dt - ADC has stable crystal timing.
@@ -215,13 +199,15 @@ class PhysicsEngine:
         dt_ms = 1000.0 / self.config["frequency"]
         
         # Update logic time with fixed increment
+        if missing_samples > 0:
+            self.logic_time += missing_samples * dt_ms
         self.logic_time += dt_ms
         now = self.logic_time
         
         # Tare Logic Intercept
         if self.is_taring:
             self.calculate_tare_logic(raw, now)
-            display_kg = (raw - self.zero_offset) / self.config["raw_per_kg"]
+            display_kg = self.signal.raw_to_kg(raw)
             return {
                 "state": "TARING",
                 "kg": display_kg,
@@ -232,7 +218,7 @@ class PhysicsEngine:
         # Calibration Logic Intercept
         if self.is_calibrating:
             self.calculate_calibration_logic(raw, now)
-            display_kg = (raw - self.zero_offset) / self.config["raw_per_kg"]
+            display_kg = self.signal.raw_to_kg(raw)
             return {
                 "state": "CALIBRATING",
                 "kg": display_kg,
@@ -240,26 +226,20 @@ class PhysicsEngine:
                 "result": None
             }
         
+        processed = self.signal.process(raw)
+        self.current_sample = processed
+
         # Delegate to Mode
         result_dict = self.active_mode.process_sample(raw, now, dt)
         
-        # ADD TO BUFFER (only time and weight needed)
-        self.add_to_buffer(now, result_dict["display_kg"])
+        # Add processed display force to buffer. Measurement filtering can be
+        # enabled in SignalConditioner without changing mode state machines.
+        self.add_to_buffer(now, result_dict.get("display_kg", processed.filtered_kg))
         
         return result_dict
 
     def generate_power_curve(self, start_time, integration_start_time, jumper_mass_kg, start_velocity=0.0):
-        # View of buffer sorted chronologically
-        if self.buf_full:
-             p1 = self.buffer[self.buf_idx:BUFFER_SIZE]
-             p2 = self.buffer[0:self.buf_idx]
-             ordered = np.concatenate((p1, p2))
-        else:
-             ordered = self.buffer[0:self.buf_idx]
-             
-        # Filter for relevant
-        mask = ordered[:, 0] >= start_time
-        relevant = ordered[mask]
+        relevant = self.sample_buffer.slice_time_range(start_time)
         
         v = 0.0  # Accumulator for Delta V
         # Actual velocity at any point is start_velocity + v

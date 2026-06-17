@@ -2,6 +2,8 @@
 desktop_app/
 
 # Python
+__pycache__/
+*.py[cod]
 python_app/__pycache__/
 python_app/*.py[cod]
 python_app/*.pyc

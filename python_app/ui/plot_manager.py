@@ -98,6 +98,7 @@ class PlotManager:
     def update_selected_from_jump(self, jump_data):
         curve = jump_data.get('force_curve')
         if not curve:
+            self._clear_plot()
             return
             
         xs = [(p['t'] - curve[0]['t'])/1000.0 for p in curve]
@@ -193,3 +194,17 @@ class PlotManager:
         dpg.fit_axis_data("y_axis_power")
         dpg.set_axis_limits_auto("y_axis_vel")
         dpg.fit_axis_data("y_axis_vel")
+
+    def _clear_plot(self):
+        for tag in (
+            "plot_line_series",
+            "plot_line_series_mass",
+            "plot_line_series_power",
+            "plot_line_series_vel",
+            "plot_line_series_ct_start",
+            "plot_line_series_ct_end",
+            "plot_line_phase_unweight",
+            "plot_line_phase_braking",
+            "plot_line_phase_propulsion",
+        ):
+            dpg.set_value(tag, [[], []])

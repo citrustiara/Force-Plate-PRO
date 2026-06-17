@@ -98,3 +98,16 @@ def create_shared_content():
                     dpg.add_button(label="Del", callback=delete_selected_jump_callback, width=60)
                 
                 dpg.add_listbox(tag="list_history", items=[], num_items=15, width=-1, callback=history_click_callback)
+
+                dpg.add_spacer(height=8)
+                dpg.add_separator()
+                with dpg.collapsing_header(label="Keybinds", default_open=False):
+                    dpg.add_text("Esc: back / deselect", color=(150, 150, 150))
+                    dpg.add_text("Enter: select menu mode", color=(150, 150, 150))
+                    dpg.add_text("Up/Down: menu/history", color=(150, 150, 150))
+                    dpg.add_text("Shift: sticky cursor", color=(150, 150, 150))
+                    dpg.add_text("Y: auto-fit Y", color=(150, 150, 150))
+                    dpg.add_text("R: live view", color=(150, 150, 150))
+                    dpg.add_text("WASD/Arrows: pan", color=(150, 150, 150))
+                    dpg.add_text("Q/E: zoom out/in", color=(150, 150, 150))
+                    dpg.add_text("T: tare  Z: reconnect  X: reset", color=(150, 150, 150), wrap=210)

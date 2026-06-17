@@ -1,6 +1,59 @@
-import sqlite3
 import json
+import sqlite3
 import time
+
+
+JUMP_SCHEMA = [
+    ("id", "INTEGER PRIMARY KEY AUTOINCREMENT"),
+    ("timestamp", "REAL"),
+    ("height_flight", "REAL"),
+    ("height_impulse", "REAL"),
+    ("peak_power", "REAL"),
+    ("avg_power", "REAL"),
+    ("flight_time", "REAL"),
+    ("jumper_weight", "REAL"),
+    ("velocity_takeoff", "REAL"),
+    ("max_force", "REAL"),
+    ("force_curve", "TEXT"),
+    ("formula_peak_power", "REAL"),
+    ("formula_avg_power", "REAL"),
+    ("velocity_flight", "REAL"),
+    ("contact_time", "REAL"),
+    ("contact_start_time", "REAL"),
+    ("contact_end_time", "REAL"),
+    ("curve_start_time", "REAL"),
+    ("unweighting_duration", "REAL"),
+    ("braking_duration", "REAL"),
+    ("propulsion_duration", "REAL"),
+    ("time_unweighting_start", "REAL"),
+    ("time_braking_start", "REAL"),
+    ("time_propulsion_start", "REAL"),
+    ("time_takeoff", "REAL"),
+    ("jump_count", "INTEGER"),
+    ("avg_height", "REAL"),
+    ("best_height", "REAL"),
+    ("avg_contact_time", "REAL"),
+    ("best_contact_time", "REAL"),
+    ("sub_jumps", "TEXT"),
+]
+
+INSERT_COLUMNS = [name for name, _ in JUMP_SCHEMA if name != "id"]
+SUMMARY_COLUMNS = [
+    name for name, _ in JUMP_SCHEMA
+    if name not in {"force_curve", "sub_jumps"}
+]
+
+SAVE_DEFAULTS = {
+    "timestamp": lambda: time.time() * 1000,
+    "height_impulse": 0,
+    "peak_power": 0,
+    "avg_power": 0,
+    "flight_time": 0,
+    "jumper_weight": 0,
+    "velocity_takeoff": 0,
+    "max_force": 0,
+}
+
 
 class DatabaseHandler:
     def __init__(self, db_path="jumps.db"):
@@ -9,243 +62,124 @@ class DatabaseHandler:
         self.init_db()
 
     def init_db(self):
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.db_path)
         c = self.conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS jumps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp REAL,
-            height_flight REAL,
-            height_impulse REAL,
-            peak_power REAL,
-            avg_power REAL,
-            flight_time REAL,
-            jumper_weight REAL,
-            velocity_takeoff REAL,
-            max_force REAL,
-            force_curve TEXT,
-            formula_peak_power REAL,
-            formula_avg_power REAL,
-            velocity_flight REAL,
-            contact_time REAL,
-            contact_start_time REAL,
-            contact_end_time REAL,
-            curve_start_time REAL,
-            unweighting_duration REAL,
-            braking_duration REAL,
-            propulsion_duration REAL,
-            time_unweighting_start REAL,
-            time_braking_start REAL,
-            time_propulsion_start REAL,
-            time_takeoff REAL
-        )''')
-        
-        c.execute('''CREATE TABLE IF NOT EXISTS settings (
+        columns_sql = ",\n            ".join(
+            f"{name} {definition}" for name, definition in JUMP_SCHEMA
+        )
+        c.execute(f"""CREATE TABLE IF NOT EXISTS jumps (
+            {columns_sql}
+        )""")
+
+        c.execute("""CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
-        )''')
-        
-        # Add missing columns if upgrading from older schema
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN formula_peak_power REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN formula_avg_power REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN velocity_flight REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN contact_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN contact_start_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN contact_end_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN curve_start_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN unweighting_duration REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN braking_duration REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN propulsion_duration REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN time_unweighting_start REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN time_braking_start REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN time_propulsion_start REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN time_takeoff REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN jump_count INTEGER")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN avg_height REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN best_height REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN avg_contact_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN best_contact_time REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            c.execute("ALTER TABLE jumps ADD COLUMN sub_jumps TEXT")
-        except sqlite3.OperationalError:
-            pass
-            
+        )""")
+
+        self._ensure_jump_columns(c)
         self.conn.commit()
 
+    def _ensure_jump_columns(self, cursor):
+        existing = set(self._jump_column_names(cursor))
+        for name, definition in JUMP_SCHEMA:
+            if name not in existing:
+                cursor.execute(f"ALTER TABLE jumps ADD COLUMN {name} {definition}")
+
+    def _jump_column_names(self, cursor=None):
+        cursor = cursor or self.conn.cursor()
+        cursor.execute("PRAGMA table_info(jumps)")
+        return [row[1] for row in cursor.fetchall()]
+
     def save_jump(self, jump_data):
-        curve_json = json.dumps(jump_data.get("force_curve", []))
-        sub_jumps_json = json.dumps(jump_data.get("sub_jumps", [])) if jump_data.get("sub_jumps") else None
-        
-        args = (
-            jump_data.get("timestamp", time.time() * 1000),
-            jump_data.get("height_flight"),
-            jump_data.get("height_impulse", 0),
-            jump_data.get("peak_power", 0),
-            jump_data.get("avg_power", 0),
-            jump_data.get("flight_time", 0),
-            jump_data.get("jumper_weight", 0),
-            jump_data.get("velocity_takeoff", 0),
-            jump_data.get("max_force", 0),
-            curve_json,
-            jump_data.get("formula_peak_power"),
-            jump_data.get("formula_avg_power"),
-            jump_data.get("velocity_flight"),
-            jump_data.get("contact_time"),
-            jump_data.get("contact_start_time"),
-            jump_data.get("contact_end_time"),
-            jump_data.get("curve_start_time"),
-            jump_data.get("unweighting_duration"),
-            jump_data.get("braking_duration"),
-            jump_data.get("propulsion_duration"),
-            jump_data.get("time_unweighting_start"),
-            jump_data.get("time_braking_start"),
-            jump_data.get("time_propulsion_start"),
-            jump_data.get("time_takeoff"),
-            jump_data.get("jump_count"),
-            jump_data.get("avg_height"),
-            jump_data.get("best_height"),
-            jump_data.get("avg_contact_time"),
-            jump_data.get("best_contact_time"),
-            sub_jumps_json
-        )
-        
+        values = [self._value_for_insert(column, jump_data) for column in INSERT_COLUMNS]
+        placeholders = ", ".join("?" for _ in INSERT_COLUMNS)
+        column_sql = ", ".join(INSERT_COLUMNS)
+
         c = self.conn.cursor()
-        c.execute('''INSERT INTO jumps 
-                  (timestamp, height_flight, height_impulse, peak_power, avg_power, 
-                   flight_time, jumper_weight, velocity_takeoff, max_force, force_curve,
-                   formula_peak_power, formula_avg_power, velocity_flight, contact_time,
-                   contact_start_time, contact_end_time, curve_start_time,
-                   unweighting_duration, braking_duration, propulsion_duration,
-                   time_unweighting_start, time_braking_start, time_propulsion_start, time_takeoff,
-                   jump_count, avg_height, best_height, avg_contact_time, best_contact_time, sub_jumps)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', args)
+        c.execute(
+            f"INSERT INTO jumps ({column_sql}) VALUES ({placeholders})",
+            values,
+        )
         self.conn.commit()
         return c.lastrowid
 
-    def load_history(self, limit=50):
-        c = self.conn.cursor()
-        c.execute("SELECT * FROM jumps ORDER BY id DESC LIMIT ?", (limit,))
-        rows = c.fetchall()
-        
-        # Get column names to handle schema variations gracefully
-        col_names = [description[0] for description in c.description]
-        col_idx = {name: i for i, name in enumerate(col_names)}
-        
-        history = []
-        for r in rows:
-            def get_val(name, default=None):
-                idx = col_idx.get(name)
-                return r[idx] if idx is not None and idx < len(r) else default
+    def _value_for_insert(self, column, jump_data):
+        if column == "force_curve":
+            return json.dumps(jump_data.get("force_curve", []))
+        if column == "sub_jumps":
+            sub_jumps = jump_data.get("sub_jumps")
+            return json.dumps(sub_jumps) if sub_jumps else None
 
-            j = {
-                "_id": get_val("id"),
-                "timestamp": get_val("timestamp"),
-                "height_flight": get_val("height_flight"),
-                "height_impulse": get_val("height_impulse"),
-                "peak_power": get_val("peak_power"),
-                "avg_power": get_val("avg_power"),
-                "flight_time": get_val("flight_time"),
-                "jumper_weight": get_val("jumper_weight"),
-                "velocity_takeoff": get_val("velocity_takeoff"),
-                "max_force": get_val("max_force"),
-                "force_curve": [],
-                "formula_peak_power": get_val("formula_peak_power"),
-                "formula_avg_power": get_val("formula_avg_power"),
-                "velocity_flight": get_val("velocity_flight"),
-                "contact_time": get_val("contact_time"),
-                "contact_start_time": get_val("contact_start_time"),
-                "contact_end_time": get_val("contact_end_time"),
-                "curve_start_time": get_val("curve_start_time"),
-                "unweighting_duration": get_val("unweighting_duration"),
-                "braking_duration": get_val("braking_duration"),
-                "propulsion_duration": get_val("propulsion_duration"),
-                "time_unweighting_start": get_val("time_unweighting_start"),
-                "time_braking_start": get_val("time_braking_start"),
-                "time_propulsion_start": get_val("time_propulsion_start"),
-                "time_takeoff": get_val("time_takeoff"),
-                "jump_count": get_val("jump_count"),
-                "avg_height": get_val("avg_height"),
-                "best_height": get_val("best_height"),
-                "avg_contact_time": get_val("avg_contact_time"),
-                "best_contact_time": get_val("best_contact_time"),
-            }
-            
-            # Remove None values to avoid 'contact_time' in j being true for None
-            if j["contact_time"] is None:
-                del j["contact_time"]
-            
-            curve_str = get_val("force_curve")
-            if curve_str:
-                try:
-                    j["force_curve"] = json.loads(curve_str)
-                except:
-                    pass
-            
-            sub_jumps_str = get_val("sub_jumps")
-            if sub_jumps_str:
-                try:
-                    j["sub_jumps"] = json.loads(sub_jumps_str)
-                except:
-                    pass
-                    
-            history.append(j)
-        return history
+        default = SAVE_DEFAULTS.get(column)
+        if callable(default):
+            default = default()
+        return jump_data.get(column, default)
+
+    def load_history(self, limit=50, include_curves=False):
+        columns = self._selectable_columns(include_curves=include_curves)
+        c = self.conn.cursor()
+        c.execute(
+            f"SELECT {', '.join(columns)} FROM jumps ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = c.fetchall()
+        return [
+            self._row_to_jump(row, columns, parse_curves=include_curves)
+            for row in rows
+        ]
+
+    def load_jump(self, jump_id):
+        columns = self._selectable_columns(include_curves=True)
+        c = self.conn.cursor()
+        c.execute(
+            f"SELECT {', '.join(columns)} FROM jumps WHERE id = ?",
+            (jump_id,),
+        )
+        row = c.fetchone()
+        if row is None:
+            return None
+        return self._row_to_jump(row, columns, parse_curves=True)
+
+    def _selectable_columns(self, include_curves):
+        desired = [name for name, _ in JUMP_SCHEMA] if include_curves else SUMMARY_COLUMNS
+        available = set(self._jump_column_names())
+        return [name for name in desired if name in available]
+
+    def _row_to_jump(self, row, columns, parse_curves):
+        data = dict(zip(columns, row))
+        jump = {"_id": data.pop("id", None)}
+        jump.update(data)
+
+        if parse_curves:
+            jump["force_curve"] = self._parse_json_list(jump.get("force_curve"))
+            sub_jumps = self._parse_json_list(jump.get("sub_jumps"))
+            if sub_jumps:
+                jump["sub_jumps"] = sub_jumps
+            else:
+                jump.pop("sub_jumps", None)
+            jump["_curve_loaded"] = True
+        else:
+            jump["force_curve"] = []
+            jump["_curve_loaded"] = False
+
+        if jump.get("contact_time") is None:
+            jump.pop("contact_time", None)
+        return jump
+
+    def _parse_json_list(self, value):
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    def delete_jump(self, jump_id):
+        c = self.conn.cursor()
+        c.execute("DELETE FROM jumps WHERE id = ?", (jump_id,))
+        self.conn.commit()
+        return c.rowcount
 
     def clear(self):
         c = self.conn.cursor()

@@ -3,6 +3,9 @@ Callback functions for the Force Plate PRO application.
 """
 import dearpygui.dearpygui as dpg
 import numpy as np
+import time
+
+from .history import parse_history_item_id
 
 # These will be set by setup_callbacks()
 _physics = None
@@ -56,16 +59,10 @@ def is_autofit_enabled():
 
 
 def reset_connection_callback(sender=None, app_data=None):
-    """Disconnect then reconnect after 100ms."""
-    import threading
-    
-    def do_reconnect():
-        import time
-        _serial_handler.disconnect()
-        time.sleep(0.1)
-        auto_connect()
-    
-    threading.Thread(target=do_reconnect, daemon=True).start()
+    """Disconnect then reconnect from the UI thread."""
+    _serial_handler.disconnect()
+    time.sleep(0.1)
+    auto_connect()
 
 
 def reset_platform_callback(sender=None, app_data=None):
@@ -127,20 +124,16 @@ def calibrate_callback():
 
 def clear_history_callback():
     """Clear all jump history."""
-    global _jump_history
+    global _jump_history, _selected_jump
     _db.clear()
     _jump_history.clear()
+    _selected_jump = None
     _current_plot_data["x"] = []
     _current_plot_data["y"] = []
     _current_plot_data["p"] = []
     _current_plot_data["v"] = []
     dpg.configure_item("list_history", items=[])
-    dpg.configure_item("plot_line_series", x=[], y=[])
-    dpg.configure_item("plot_line_series_power", x=[], y=[])
-    dpg.configure_item("plot_line_series_vel", x=[], y=[])
-    dpg.configure_item("plot_line_series_mass", x=[], y=[])
-    dpg.configure_item("plot_line_series_ct_start", x=[], y=[])
-    dpg.configure_item("plot_line_series_ct_end", x=[], y=[])
+    _clear_plot_series()
 
 
 def delete_selected_jump_callback():
@@ -150,26 +143,17 @@ def delete_selected_jump_callback():
     if not selection:
         return
     
-    idx_str = selection.split(':')[0].replace('#', '')
     try:
-        idx = int(idx_str)
+        idx = parse_history_item_id(selection)
+        if idx is None:
+            return
+        _db.delete_jump(idx)
         _jump_history[:] = [j for j in _jump_history if j['_id'] != idx]
-        
-        # Update Listbox
-        items = [
-            f"#{j['_id']}: {j['height_flight']:.1f}cm ({j['flight_time']:.0f}ms)" 
-            if (j.get('height_flight') or 0) > 0 
-            else f"#{j['_id']}: CT {j.get('contact_time', 0):.0f}ms" if 'contact_time' in j
-            else f"#{j['_id']}: Imp {j.get('height_impulse', 0):.1f}cm" 
-            for j in _jump_history
-        ]
-        dpg.configure_item("list_history", items=items)
+        dpg.set_value("list_history", "")
         
         if _selected_jump and _selected_jump['_id'] == idx:
             _selected_jump = None
-            dpg.configure_item("plot_line_series", x=[], y=[])
-            dpg.configure_item("plot_line_series_power", x=[], y=[])
-            dpg.configure_item("plot_line_series_vel", x=[], y=[])
+            _clear_plot_series()
             
     except ValueError:
         pass
@@ -182,8 +166,9 @@ def history_click_callback(sender, app_data):
         return
     
     try:
-        idx_str = app_data.split(':')[0].replace('#', '')
-        idx = int(idx_str)
+        idx = parse_history_item_id(app_data)
+        if idx is None:
+            return
         target = None
         for j in _jump_history:
             if j['_id'] == idx:
@@ -191,73 +176,29 @@ def history_click_callback(sender, app_data):
                 break
         
         if target:
+            if not target.get("_curve_loaded", True):
+                loaded = _db.load_jump(idx)
+                if loaded:
+                    target.update(loaded)
             _selected_jump = target
-            
-            curve = target.get('force_curve')
-            if curve and len(curve) > 0:
-                xs = [(p['t'] - curve[0]['t'])/1000.0 for p in curve]
-                ys = [p.get('v', 0) for p in curve] 
-                
-                # Check if power and velocity are present
-                has_power = all(p.get('p') is not None for p in curve)
-                has_vel = all(p.get('vel') is not None for p in curve)
-
-                ps = [p.get('p', 0) for p in curve] if has_power else []
-                vs = [p.get('vel', 0) for p in curve] if has_vel else []
-                
-                xs = np.ascontiguousarray(xs)
-                ys = np.ascontiguousarray(ys)
-                ps = np.ascontiguousarray(ps)
-                vs = np.ascontiguousarray(vs)
-
-                dpg.configure_item("plot_line_series", x=xs, y=ys)
-                dpg.configure_item("plot_line_series_power", x=xs if has_power else [], y=ps if has_power else [])
-                dpg.configure_item("plot_line_series_vel", x=xs if has_vel else [], y=vs if has_vel else [])
-                
-                _current_plot_data["x"] = xs
-                _current_plot_data["y"] = ys
-                _current_plot_data["p"] = ps if has_power else []
-                _current_plot_data["v"] = vs if has_vel else []
-                
-                # --- Mass line update ---
-                mass = target.get('jumper_weight', 0)
-                if mass > 0 and len(xs) > 0:
-                    dpg.configure_item("plot_line_series_mass", x=[xs[0], xs[-1]], y=[mass, mass])
-                else:
-                    dpg.configure_item("plot_line_series_mass", x=[], y=[])
-
-                # --- Contact Time Markers ---
-                t_start = target.get('contact_start_time')
-                t_end = target.get('contact_end_time')
-                t_curve = target.get('curve_start_time')
-                
-                if t_start and t_end and t_curve:
-                    x_s = (t_start - t_curve) / 1000.0
-                    x_e = (t_end - t_curve) / 1000.0
-                    max_y = np.max(ys) if len(ys) > 0 else 200
-                    dpg.configure_item("plot_line_series_ct_start", x=[x_s, x_s], y=[0, max_y])
-                    dpg.configure_item("plot_line_series_ct_end", x=[x_e, x_e], y=[0, max_y])
-                else:
-                    dpg.configure_item("plot_line_series_ct_start", x=[], y=[])
-                    dpg.configure_item("plot_line_series_ct_end", x=[], y=[])
-            else:
-                # No curve, clear plots
-                dpg.configure_item("plot_line_series", x=[], y=[])
-                dpg.configure_item("plot_line_series_power", x=[], y=[])
-                dpg.configure_item("plot_line_series_vel", x=[], y=[])
-                dpg.configure_item("plot_line_series_mass", x=[], y=[])
-                dpg.configure_item("plot_line_series_ct_start", x=[], y=[])
-                dpg.configure_item("plot_line_series_ct_end", x=[], y=[])
-            
-            dpg.fit_axis_data("x_axis")
-            dpg.fit_axis_data("y_axis")
-            dpg.set_axis_limits_auto("y_axis_power")
-            dpg.fit_axis_data("y_axis_power")
-            dpg.set_axis_limits_auto("y_axis_vel")
-            dpg.fit_axis_data("y_axis_vel")
             
     except Exception as e:
         print(f"Error in history_click_callback: {e}")
+
+
+def _clear_plot_series():
+    for tag in (
+        "plot_line_series",
+        "plot_line_series_power",
+        "plot_line_series_vel",
+        "plot_line_series_mass",
+        "plot_line_series_ct_start",
+        "plot_line_series_ct_end",
+        "plot_line_phase_unweight",
+        "plot_line_phase_braking",
+        "plot_line_phase_propulsion",
+    ):
+        dpg.set_value(tag, [[], []])
 
 
 def update_current_plot_data(x, y, p, v):
@@ -329,8 +270,9 @@ def manual_mass_callback(sender, app_data):
         try:
             mass = float(app_data)
             _physics.active_mode.set_mass(mass)
-        except ValueError:
-            pass
+        except (TypeError, ValueError) as e:
+            print(f"Invalid manual mass: {e}")
+            dpg.set_value(sender, _physics.active_mode.jumper_mass_kg)
 
 
 def manual_start_vel_callback(sender, app_data):
@@ -456,6 +398,7 @@ def on_new_jump(jump_result):
     # Save to DB
     new_id = _db.save_jump(jump_result)
     jump_result['_id'] = new_id
+    jump_result['_curve_loaded'] = True
     
     # Add to history
     _jump_history.insert(0, jump_result)  # Newest first
